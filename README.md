@@ -32,34 +32,44 @@ docker run --rm \
 
 ### Kubernetes (Helm)
 
-#### 方式一：使用本地 Chart 目录
+#### Option 1: Use the local Chart directory
 
 ```bash
 git clone https://github.com/yinxulai/database-backup.git
 cd database-backup
 
-# 编辑 values.yaml 或使用 --set
+# Edit values.yaml or pass values with --set
 helm install database-backup ./helm/database-backup -f values.yaml
 ```
 
-#### 方式二：使用打包的 Chart
+#### Option 2: Download the packaged Chart from a GitHub Release
 
 ```bash
-# 下载最新 Chart
-wget https://github.com/yinxulai/database-backup/releases/latest/download/database-backup-*.tgz
+# Download a packaged Chart from the Release page
+wget https://github.com/yinxulai/database-backup/releases/download/v<VERSION>/database-backup-<VERSION>.tgz
 
-# 安装
+# Install the packaged Chart
+helm install database-backup ./database-backup-<VERSION>.tgz -f values.yaml
+```
+
+#### Option 3: Package the Chart locally
+
+```bash
+# Package the Chart from this repository
+helm package ./helm/database-backup
+
+# Install the packaged Chart
 helm install database-backup ./database-backup-*.tgz -f values.yaml
 ```
 
-#### 方式三：使用 OCI 镜像（需自行打包 Chart）
+#### Option 4: Use an OCI registry
 
 ```bash
-# 构建并推送 Chart 到 OCI registry
+# Package and push the Chart to your own OCI registry
 helm package ./helm/database-backup
 helm push database-backup-*.tgz oci://your-registry/database-backup
 
-# 安装
+# Install from the OCI registry
 helm install database-backup oci://your-registry/database-backup -f values.yaml
 ```
 

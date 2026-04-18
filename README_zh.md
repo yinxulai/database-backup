@@ -162,16 +162,28 @@ docker run --rm \
 
 ### Kubernetes (Helm)
 
-```bash
-# 添加 Helm 仓库
-helm repo add database-backup https://yinxulai.github.io/database-backup
+#### 方式一：直接使用仓库内的 Chart
 
-# 安装
-helm install database-backup database-backup/database-backup \
+```bash
+helm install database-backup ./helm/database-backup \
   --set config.content="$(cat backup.yaml)"
 
 # 或使用 values 文件
-helm install database-backup database-backup/database-backup -f values.yaml
+helm install database-backup ./helm/database-backup -f values.yaml
+```
+
+#### 方式二：从 GitHub Release 下载打包好的 Chart
+
+```bash
+wget https://github.com/yinxulai/database-backup/releases/download/v<版本号>/database-backup-<版本号>.tgz
+helm install database-backup ./database-backup-<版本号>.tgz -f values.yaml
+```
+
+#### 方式三：在本地自行打包后安装
+
+```bash
+helm package ./helm/database-backup
+helm install database-backup ./database-backup-*.tgz -f values.yaml
 ```
 
 `values.yaml` 示例：
