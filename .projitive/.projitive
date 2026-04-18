@@ -71,24 +71,24 @@
     {
       "id": "TASK-0006",
       "title": "实现 Prometheus Metrics 上报",
-      "status": "TODO",
+      "status": "IN_PROGRESS",
       "owner": "",
       "summary": "实现 Prometheus 指标上报，支持备份成功/失败/耗时/大小等指标",
-      "updatedAt": "2026-04-18T04:35:30.316Z",
+      "updatedAt": "2026-04-18T04:58:31.913Z",
       "links": [],
       "roadmapRefs": [],
-      "recordVersion": 1
+      "recordVersion": 2
     },
     {
       "id": "TASK-0007",
       "title": "实现备份验证 Dry Run",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "",
       "summary": "实现备份上传前的 dry-run 验证，确保 dump 可读",
-      "updatedAt": "2026-04-18T04:54:14.819Z",
+      "updatedAt": "2026-04-18T04:57:53.923Z",
       "links": [],
       "roadmapRefs": [],
-      "recordVersion": 2
+      "recordVersion": 3
     },
     {
       "id": "TASK-0008",
@@ -124,7 +124,7 @@
     }
   ],
   "meta": {
-    "tasks_version": 18,
+    "tasks_version": 20,
     "roadmaps_version": 1,
     "store_schema_version": 3
   },
@@ -132,9 +132,9 @@
     "tasks_markdown": {
       "name": "tasks_markdown",
       "dirty": false,
-      "lastSourceVersion": 18,
-      "lastBuiltAt": "2026-04-18T04:54:14.825Z",
-      "recordVersion": 54
+      "lastSourceVersion": 20,
+      "lastBuiltAt": "2026-04-18T04:58:31.918Z",
+      "recordVersion": 60
     },
     "roadmaps_markdown": {
       "name": "roadmaps_markdown",
