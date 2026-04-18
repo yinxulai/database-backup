@@ -5,61 +5,72 @@ metadata:
   name: {{ include "database-backup.fullname" . }}
   labels:
     {{- include "database-backup.labels" . | nindent 4 }}
-{{- with .Values.podAnnotations }}
-  annotations:
-    {{- toYaml . | nindent 4 }}
-{{- end }}
 spec:
   schedule: {{ .Values.schedule | quote }}
-  timezone: {{ .Values.timezone | quote }}
+  {{- if .Values.timezone }}
+  timeZone: {{ .Values.timezone | quote }}
+  {{- end }}
   successfulJobsHistoryLimit: {{ .Values.successfulJobsHistoryLimit }}
   failedJobsHistoryLimit: {{ .Values.failedJobsHistoryLimit }}
   concurrencyPolicy: {{ .Values.concurrencyPolicy }}
-{{- with .Values.startingDeadlineSeconds }}
-  startingDeadlineSeconds: {{ . }}
-{{- end }}
+  {{- if .Values.startingDeadlineSeconds }}
+  startingDeadlineSeconds: {{ .Values.startingDeadlineSeconds }}
+  {{- end }}
   suspend: {{ .Values.suspend }}
   jobTemplate:
     metadata:
       labels:
         {{- include "database-backup.selectorLabels" . | nindent 8 }}
     spec:
-{{- if .Values.backoffLimit }}
+      {{- if .Values.backoffLimit }}
       backoffLimit: {{ .Values.backoffLimit }}
-{{- end }}
-{{- if .Values.ttlSecondsAfterFinished }}
+      {{- end }}
+      {{- if .Values.ttlSecondsAfterFinished }}
       ttlSecondsAfterFinished: {{ .Values.ttlSecondsAfterFinished }}
-{{- end }}
+      {{- end }}
       template:
         metadata:
           labels:
             {{- include "database-backup.selectorLabels" . | nindent 12 }}
-{{- with .Values.podLabels }}
-            {{- toYaml . | nindent 14 }}
-{{- end }}
+          {{- if .Values.podAnnotations }}
+          annotations:
+            {{- .Values.podAnnotations | toJson | nindent 14 }}
+          {{- end }}
         spec:
           restartPolicy: {{ .Values.restartPolicy }}
           serviceAccountName: {{ include "database-backup.serviceAccountName" . }}
-          {{- with .Values.imagePullSecrets }}
+          {{- if .Values.imagePullSecrets }}
           imagePullSecrets:
-            {{- toYaml . | nindent 12 }}
+            {{- range .Values.imagePullSecrets }}
+            - name: {{ . }}
+            {{- end }}
           {{- end }}
+          {{- if or .Values.podSecurityContext.runAsNonRoot .Values.podSecurityContext.runAsUser .Values.podSecurityContext.fsGroup }}
           securityContext:
-            {{- toYaml .Values.podSecurityContext | nindent 12 }}
-          {{- with .Values.nodeSelector }}
+            {{- if .Values.podSecurityContext.runAsNonRoot }}
+            runAsNonRoot: {{ .Values.podSecurityContext.runAsNonRoot }}
+            {{- end }}
+            {{- if .Values.podSecurityContext.runAsUser }}
+            runAsUser: {{ .Values.podSecurityContext.runAsUser }}
+            {{- end }}
+            {{- if .Values.podSecurityContext.fsGroup }}
+            fsGroup: {{ .Values.podSecurityContext.fsGroup }}
+            {{- end }}
+          {{- end }}
+          {{- if .Values.nodeSelector }}
           nodeSelector:
-            {{- toYaml . | nindent 10 }}
+            {{- .Values.nodeSelector | toJson | nindent 10 }}
           {{- end }}
-          {{- with .Values.affinity }}
+          {{- if .Values.affinity }}
           affinity:
-            {{- toYaml . | nindent 10 }}
+            {{- .Values.affinity | toJson | nindent 10 }}
           {{- end }}
-          {{- with .Values.tolerations }}
+          {{- if .Values.tolerations }}
           tolerations:
-            {{- toYaml . | nindent 8 }}
+            {{- .Values.tolerations | toJson | nindent 10 }}
           {{- end }}
           containers:
-            - name: backup
+            - name: {{ .Chart.Name }}
               image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
               imagePullPolicy: {{ .Values.image.pullPolicy }}
               command:
@@ -68,16 +79,7 @@ spec:
                 - run
                 - --config
                 - /config/backup.yaml
-              {{- if .Values.resources }}
-              resources:
-                {{- toYaml .Values.resources | nindent 14 }}
-              {{- end }}
-              securityContext:
-                {{- toYaml .Values.containerSecurityContext | nindent 14 }}
-              volumeMounts:
-                - name: config
-                  mountPath: /config
-                  readOnly: true
+              {{- if .Values.env }}
               env:
                 {{- range .Values.env }}
                 - name: {{ .name }}
@@ -85,13 +87,59 @@ spec:
                   value: {{ .value | quote }}
                   {{- else if .valueFrom }}
                   valueFrom:
-                    {{- toYaml .valueFrom | nindent 20 }}
+                    {{- if .valueFrom.secretKeyRef }}
+                    secretKeyRef:
+                      name: {{ .valueFrom.secretKeyRef.name }}
+                      key: {{ .valueFrom.secretKeyRef.key }}
+                    {{- end }}
+                    {{- if .valueFrom.configMapRef }}
+                    configMapKeyRef:
+                      name: {{ .valueFrom.configMapRef.name }}
+                      key: {{ .valueFrom.configMapRef.key }}
+                    {{- end }}
                   {{- end }}
                 {{- end }}
-              {{- with .Values.envFrom }}
-              envFrom:
-                {{- toYaml . | nindent 14 }}
               {{- end }}
+              {{- if .Values.envFrom }}
+              envFrom:
+                {{- range .Values.envFrom }}
+                {{- if .configMapRef }}
+                - configMapRef:
+                    name: {{ .configMapRef.name }}
+                {{- end }}
+                {{- if .secretRef }}
+                - secretRef:
+                    name: {{ .secretRef.name }}
+                {{- end }}
+                {{- end }}
+              {{- end }}
+              {{- if .Values.resources.limits }}
+              resources:
+                limits:
+                  cpu: {{ .Values.resources.limits.cpu | default "1000m" }}
+                  memory: {{ .Values.resources.limits.memory | default "512Mi" }}
+                requests:
+                  cpu: {{ .Values.resources.requests.cpu | default "100m" }}
+                  memory: {{ .Values.resources.requests.memory | default "128Mi" }}
+              {{- end }}
+              {{- if .Values.containerSecurityContext.allowPrivilegeEscalation }}
+              securityContext:
+                allowPrivilegeEscalation: {{ .Values.containerSecurityContext.allowPrivilegeEscalation }}
+                {{- if .Values.containerSecurityContext.readOnlyRootFilesystem }}
+                readOnlyRootFilesystem: {{ .Values.containerSecurityContext.readOnlyRootFilesystem }}
+                {{- end }}
+                {{- if .Values.containerSecurityContext.capabilities.drop }}
+                capabilities:
+                  drop:
+                    {{- range .Values.containerSecurityContext.capabilities.drop }}
+                    - {{ . }}
+                    {{- end }}
+                {{- end }}
+              {{- end }}
+              volumeMounts:
+                - name: config
+                  mountPath: /config
+                  readOnly: true
           volumes:
             - name: config
               configMap:

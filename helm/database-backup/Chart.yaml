@@ -10,11 +10,11 @@ keywords:
   - postgresql
   - mysql
   - s3
+  - cronjob
   - kubernetes
-  - helm
+home: https://github.com/yinxulai/database-backup
+sources:
+  - https://github.com/yinxulai/database-backup
 maintainers:
   - name: yinxulai
     url: https://github.com/yinxulai
-sources:
-  - https://github.com/yinxulai/database-backup
-icon: https://raw.githubusercontent.com/yinxulai/database-backup/main/logo.svg

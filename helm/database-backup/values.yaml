@@ -1,84 +1,69 @@
-# Default values for database-backup
+# Default values for database-backup.
 
 image:
   repository: ghcr.io/yinxulai/database-backup
-  # Overridden by --set.image.tag={{ .Chart.AppVersion }}
-  tag: "0.1.0"
   pullPolicy: IfNotPresent
+  tag: ""
 
 imagePullSecrets: []
 
-# Existing image pull secret (if private registry)
-# Example: my-registry-secret
-existingImagePullSecret: ""
+nameOverride: ""
+fullnameOverride: ""
 
 serviceAccount:
-  # Specifies whether a service account should be created
   create: true
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
-  name: ""
+  automount: true
   annotations: {}
+  name: ""
 
-# Cron schedule for backup jobs
-# Default: every day at 2 AM
+# CronJob configuration
 schedule: "0 2 * * *"
 timezone: "UTC"
-
-# Number of successful jobs to retain
 successfulJobsHistoryLimit: 3
-# Number of failed jobs to retain
 failedJobsHistoryLimit: 3
-
-# Concurrency policy: Allow, Forbid, Replace
 concurrencyPolicy: Forbid
-
-# Starting deadline (seconds)
 startingDeadlineSeconds: 300
-
-# Suspend all cron jobs
 suspend: false
+restartPolicy: OnFailure
+backoffLimit: 3
+ttlSecondsAfterFinished: ""
 
-# Backup configuration - mounted as configmap
+# Backup configuration (YAML content)
 config:
-  # Config file content (YAML)
-  # Example:
-  # apiVersion: backup.taicode/v1
-  # kind: BackupGroup
-  # metadata:
-  #   name: my-backup
-  # spec:
-  #   source:
-  #     type: postgresql
-  #     connection:
-  #       host: postgres.database.svc.cluster.local
-  #       port: 5432
-  #       username: postgres
-  #       passwordSecretRef:
-  #         type: k8s
-  #         secretName: postgres-secret
-  #         secretKey: password
-  #     database: myapp
-  #   destination:
-  #     type: s3
-  #     s3:
-  #       endpoint: https://s3.amazonaws.com
-  #       region: us-east-1
-  #       bucket: my-backups
-  #       accessKeySecretRef:
-  #         type: k8s
-  #         secretName: aws-secret
-  #         secretKey: access-key-id
-  #       secretKeySecretRef:
-  #         type: k8s
-  #         secretName: aws-secret
-  #         secretKey: secret-access-key
-  content: ""
+  content: |
+    # apiVersion: backup.taicode/v1
+    # kind: BackupGroup
+    # metadata:
+    #   name: my-backup
+    # spec:
+    #   source:
+    #     type: postgresql
+    #     connection:
+    #       host: postgres.database.svc.cluster.local
+    #       port: 5432
+    #       username: postgres
+    #       passwordSecretRef:
+    #         type: k8s
+    #         secretName: postgres-secret
+    #         secretKey: password
+    #     database: myapp
+    #   destination:
+    #     type: s3
+    #     s3:
+    #       endpoint: https://s3.amazonaws.com
+    #       region: us-east-1
+    #       bucket: my-backups
+    #       accessKeySecretRef:
+    #         type: k8s
+    #         secretName: aws-secret
+    #         secretKey: access-key-id
+    #       secretKeySecretRef:
+    #         type: k8s
+    #         secretName: aws-secret
+    #         secretKey: secret-access-key
 
-# Environment variables from secrets
-# These will be automatically set from K8s secrets
+# Environment variables
 env: []
-# Example:
 # - name: AWS_ACCESS_KEY_ID
 #   valueFrom:
 #     secretKeyRef:
@@ -90,13 +75,10 @@ env: []
 #       name: aws-secret
 #       key: secret-access-key
 
-# Environment variables from configmap
 envFrom: []
-# Example:
 # - configMapRef:
 #     name: my-configmap
 
-# Resources for the job
 resources:
   limits:
     cpu: 1000m
@@ -105,22 +87,17 @@ resources:
     cpu: 100m
     memory: 128Mi
 
-# Node selector
 nodeSelector: {}
 
-# Tolerations
 tolerations: []
 
-# Affinity
 affinity: {}
 
-# Security context for pod
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 1000
   fsGroup: 1000
 
-# Security context for container
 containerSecurityContext:
   allowPrivilegeEscalation: false
   readOnlyRootFilesystem: true
@@ -128,17 +105,5 @@ containerSecurityContext:
     drop:
       - ALL
 
-# Annotations for pod
 podAnnotations: {}
-
-# Labels for pod
 podLabels: {}
-
-# Restart policy (Never, OnFailure, Always)
-restartPolicy: OnFailure
-
-# Backoff limit (number of retries before marking as failed)
-backoffLimit: 3
-
-# TTL seconds after job finishes
-# ttlSecondsAfterFinished: 3600
