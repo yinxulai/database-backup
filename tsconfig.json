@@ -12,8 +12,7 @@
       "@core/*": ["source/core/*"],
       "@adapters/*": ["source/adapters/*"],
       "@health/*": ["source/health/*"],
-      "@retention/*": ["source/retention/*"],
-      "@metrics/*": ["source/metrics/*"]
+      "@retention/*": ["source/retention/*"]
     },
     "outDir": "./output",
     "rootDir": "./source",
