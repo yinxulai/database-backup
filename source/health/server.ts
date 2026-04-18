@@ -1,38 +1,20 @@
-
 import { createServer, type Server } from 'node:http'
 import type { DatabaseDriver } from '@core/interfaces'
 import type { HealthStatus } from './types.js'
-import type { MetricsCollector } from '@metrics/types.js'
 
 export interface HealthServerOptions {
   port: number
   databaseDrivers: DatabaseDriver[]
   handler?: (path: string) => Promise<HealthStatus>
-  metricsCollector?: MetricsCollector
 }
 
 export function createHealthServer(options: HealthServerOptions): Server {
-  const { port, databaseDrivers, metricsCollector } = options
+  const { port, databaseDrivers } = options
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://localhost:${port}`)
 
     res.setHeader('Access-Control-Allow-Origin', '*')
-
-    // Metrics endpoint - Prometheus text format
-    if (url.pathname === '/metrics') {
-      if (!metricsCollector) {
-        res.statusCode = 503
-        res.setHeader('Content-Type', 'text/plain')
-        res.end('Metrics collector not configured')
-        return
-      }
-      res.statusCode = 200
-      res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8')
-      res.end(metricsCollector.toPrometheusFormat())
-      return
-    }
-
     res.setHeader('Content-Type', 'application/json')
 
     if (url.pathname === '/health/live') {
