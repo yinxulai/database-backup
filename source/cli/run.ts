@@ -12,13 +12,14 @@ import { createEnvSecretResolver } from '../adapters/secret/env.js'
 import { createPostgreSQLDriver } from '../adapters/database/postgresql.js'
 import { createS3StorageDriver } from '../adapters/storage/s3.js'
 import { createBackupExecutor } from '../core/executor.js'
+import { createRetentionExecutor } from '../retention/executor.js'
 import type { SecretResolver, DatabaseDriver, StorageDriver } from '../core/interfaces.js'
 import type { ResolvedConfig, BackupGroup, SecretRef } from '../core/types.js'
 
 /**
  * CLI 命令类型
  */
-type Command = 'run' | 'validate' | 'version' | 'help'
+type Command = 'run' | 'validate' | 'retention' | 'version' | 'help'
 
 /**
  * CLI 选项
@@ -41,6 +42,9 @@ export async function runCli(args: string[]): Promise<void> {
       break
     case 'validate':
       await validateCommand(options)
+      break
+    case 'retention':
+      await retentionCommand(options, args)
       break
     case 'version':
       versionCommand()
@@ -166,6 +170,57 @@ async function validateCommand(options: CliOptions): Promise<void> {
 }
 
 /**
+ * retention 命令
+ */
+async function retentionCommand(options: CliOptions, args: string[]): Promise<void> {
+  if (!options.config) {
+    console.error('Error: --config is required')
+    console.error('Usage: backup retention --config <file> [--dry-run]')
+    process.exit(1)
+  }
+
+  const configPath = resolve(options.config)
+  console.log(`[retention] Loading config from: ${configPath}`)
+
+  try {
+    // 解析 --dry-run 参数
+    const dryRun = args.includes('--dry-run') || args.includes('-d')
+    if (dryRun) {
+      console.log('[retention] Dry-run mode enabled (no files will be deleted)')
+    }
+
+    // 1. 扫描配置
+    const scanner = createConfigScanner()
+    const groups = await scanner.scan(configPath)
+
+    if (groups.length === 0) {
+      console.error('Error: No BackupGroup found in config')
+      process.exit(1)
+    }
+
+    // 2. 解析配置（加载 Secret）
+    const secretResolver = createEnvSecretResolver()
+    const resolvedConfigs = await Promise.all(
+      groups.map((group) => resolveConfig(group, secretResolver))
+    )
+
+    // 3. 执行保留策略
+    for (const config of resolvedConfigs) {
+      const retentionExecutor = createRetentionExecutor(createStorageDriver(config))
+      const result = await retentionExecutor.applyRetention(config, { dryRun })
+
+      if (options.output === 'json') {
+        console.log(JSON.stringify(result, null, 2))
+      }
+    }
+
+  } catch (err) {
+    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`)
+    process.exit(1)
+  }
+}
+
+/**
  * version 命令
  */
 function versionCommand(): void {
@@ -185,16 +240,19 @@ Usage:
 
 Commands:
   run          Execute backup
+  retention    Apply retention policy
   validate     Validate config file
   version      Show version
   help         Show this help
 
 Options:
-  -c, --config <file>   Config file path (required for run/validate)
+  -c, --config <file>   Config file path (required for run/retention/validate)
   -o, --output <format> Output format: text (default) or json
 
 Examples:
   backup run --config backup.yaml
+  backup retention --config backup.yaml
+  backup retention --config backup.yaml --dry-run
   backup validate --config backup.yaml
   backup run --config backup.yaml --output json
 

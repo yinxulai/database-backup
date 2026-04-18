@@ -81,6 +81,13 @@ export interface StorageDriver {
    * @param key 存储路径
    */
   delete(key: string): Promise<void>
+
+  /**
+   * 列出存储对象
+   * @param prefix 路径前缀（可选）
+   * @returns 存储对象列表
+   */
+  list(prefix?: string): Promise<StorageObject[]>
 }
 
 /**
@@ -135,6 +142,21 @@ export interface ValidationError {
  * 结果存储器
  * 
  * 负责存储和查询备份结果
+ */
+/**
+ * 存储对象元数据
+ */
+export interface StorageObject {
+  /** 存储路径 */
+  key: string
+  /** 文件大小（字节）*/
+  size: number
+  /** 最后修改时间 */
+  lastModified: Date
+}
+
+/**
+ * 结果存储器
  */
 export interface ResultStore {
   /**

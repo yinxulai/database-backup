@@ -11,7 +11,9 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
 } from '@aws-sdk/client-s3'
+import type { StorageObject } from '../../core/interfaces.js'
 import type { ResolvedS3Config, UploadResult } from '../../core/types.js'
 import type { StorageDriver } from '../../core/interfaces.js'
 
@@ -84,6 +86,46 @@ export class S3StorageDriver implements StorageDriver {
     })
 
     await this.client.send(command)
+  }
+
+  /**
+   * 列出存储对象
+   */
+  async list(prefix?: string): Promise<StorageObject[]> {
+    const fullPrefix = prefix
+      ? this.config.pathPrefix
+        ? `${this.config.pathPrefix}/${prefix}`
+        : prefix
+      : this.config.pathPrefix ?? ''
+
+    const objects: StorageObject[] = []
+    let continuationToken: string | undefined
+
+    do {
+      const command = new ListObjectsV2Command({
+        Bucket: this.config.bucket,
+        Prefix: fullPrefix,
+        ContinuationToken: continuationToken,
+      })
+
+      const response = await this.client.send(command)
+
+      if (response.Contents) {
+        for (const item of response.Contents) {
+          if (item.Key && item.Size !== undefined) {
+            objects.push({
+              key: item.Key,
+              size: item.Size,
+              lastModified: item.LastModified ?? new Date(),
+            })
+          }
+        }
+      }
+
+      continuationToken = response.NextContinuationToken
+    } while (continuationToken)
+
+    return objects
   }
 
   /**

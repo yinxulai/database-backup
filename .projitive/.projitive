@@ -104,13 +104,13 @@
     {
       "id": "TASK-0009",
       "title": "实现备份保留策略",
-      "status": "TODO",
+      "status": "IN_PROGRESS",
       "owner": "",
       "summary": "实现基于时间和数量的备份保留策略，自动清理过期备份",
-      "updatedAt": "2026-04-18T04:35:42.432Z",
+      "updatedAt": "2026-04-18T04:47:25.275Z",
       "links": [],
       "roadmapRefs": [],
-      "recordVersion": 1
+      "recordVersion": 2
     }
   ],
   "roadmaps": [
@@ -124,7 +124,7 @@
     }
   ],
   "meta": {
-    "tasks_version": 13,
+    "tasks_version": 14,
     "roadmaps_version": 1,
     "store_schema_version": 3
   },
@@ -132,9 +132,9 @@
     "tasks_markdown": {
       "name": "tasks_markdown",
       "dirty": false,
-      "lastSourceVersion": 13,
-      "lastBuiltAt": "2026-04-18T04:35:42.443Z",
-      "recordVersion": 39
+      "lastSourceVersion": 14,
+      "lastBuiltAt": "2026-04-18T04:47:25.280Z",
+      "recordVersion": 42
     },
     "roadmaps_markdown": {
       "name": "roadmaps_markdown",
