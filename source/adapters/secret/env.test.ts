@@ -2,7 +2,7 @@
  * EnvSecretResolver 单元测试
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { EnvSecretResolver } from './env.js'
 import type { SecretRef } from '../../core/types.js'
 
@@ -13,9 +13,15 @@ describe('EnvSecretResolver', () => {
     resolver = new EnvSecretResolver()
   })
 
+  afterEach(() => {
+    // Clean up test env vars
+    delete process.env.TEST_DB_PASSWORD
+    delete process.env.TEST_EMPTY_PASSWORD
+    delete process.env.TEST_SPECIAL_PASSWORD
+  })
+
   describe('resolve()', () => {
     it('should resolve existing environment variable', async () => {
-      // Set test env var
       process.env.TEST_DB_PASSWORD = 'my-secret-password'
 
       const ref: SecretRef = {
@@ -25,9 +31,6 @@ describe('EnvSecretResolver', () => {
 
       const result = await resolver.resolve(ref)
       expect(result).toBe('my-secret-password')
-
-      // Clean up
-      delete process.env.TEST_DB_PASSWORD
     })
 
     it('should throw when env var does not exist', async () => {
@@ -68,9 +71,6 @@ describe('EnvSecretResolver', () => {
 
       const result = await resolver.resolve(ref)
       expect(result).toBe('')
-
-      // Clean up
-      delete process.env.TEST_EMPTY_PASSWORD
     })
 
     it('should handle special characters in password', async () => {
@@ -83,9 +83,6 @@ describe('EnvSecretResolver', () => {
 
       const result = await resolver.resolve(ref)
       expect(result).toBe('p@ss!#$%^&*()_+-=[]{}|;:\',.<>?/')
-
-      // Clean up
-      delete process.env.TEST_SPECIAL_PASSWORD
     })
   })
 })
