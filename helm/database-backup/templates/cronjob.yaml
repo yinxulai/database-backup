@@ -74,8 +74,9 @@ spec:
               image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
               imagePullPolicy: {{ .Values.image.pullPolicy }}
               command:
-                - node
-                - /app/output/cli/run.js
+                - pnpm
+                - dev
+                - --
                 - run
                 - --config
                 - /config/backup.yaml
