@@ -191,7 +191,7 @@ export interface BackupResult {
 /**
  * 备份状态
  */
-export type BackupStatus = 'pending' | 'running' | 'completed' | 'failed'
+export type BackupStatus = 'pending' | 'running' | 'completed' | 'failed' | 'dry-run-completed'
 
 /**
  * Dump 选项

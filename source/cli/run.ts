@@ -1,7 +1,6 @@
 /**
- * CLI 入口
- * 
- * 命令行接口实现
+ * @fileoverview CLI entry point
+ * @module @taicode/backup/cli/run
  */
 
 import { parseArgs } from 'node:util'
@@ -12,29 +11,21 @@ import { createEnvSecretResolver } from '../adapters/secret/env.js'
 import { createPostgreSQLDriver } from '../adapters/database/postgresql.js'
 import { createS3StorageDriver } from '../adapters/storage/s3.js'
 import { createBackupExecutor } from '../core/executor.js'
-import { createRetentionExecutor } from '../retention/executor.js'
-import { createHealthServer } from '../health/server.js'
+import { createLogger } from '../core/logger.js'
 import type { SecretResolver, DatabaseDriver, StorageDriver } from '../core/interfaces.js'
-import type { ResolvedConfig, BackupGroup, SecretRef } from '../core/types.js'
+import type { ResolvedConfig, BackupGroup } from '../core/types.js'
 
-/**
- * CLI 命令类型
- */
-type Command = 'run' | 'validate' | 'retention' | 'serve' | 'version' | 'help'
+const logger = createLogger()
 
-/**
- * CLI 选项
- */
+type Command = 'run' | 'validate' | 'version' | 'help'
+
 interface CliOptions {
   command: Command
   config?: string
   output: 'text' | 'json'
-  port?: number
+  dryRun?: boolean
 }
 
-/**
- * CLI 主函数
- */
 export async function runCli(args: string[]): Promise<void> {
   const options = parseCliArgs(args)
 
@@ -44,12 +35,6 @@ export async function runCli(args: string[]): Promise<void> {
       break
     case 'validate':
       await validateCommand(options)
-      break
-    case 'retention':
-      await retentionCommand(options, args)
-      break
-    case 'serve':
-      await serveCommand(options)
       break
     case 'version':
       versionCommand()
@@ -61,9 +46,6 @@ export async function runCli(args: string[]): Promise<void> {
   }
 }
 
-/**
- * 解析命令行参数
- */
 function parseCliArgs(args: string[]): CliOptions {
   const { values, positionals } = parseArgs({
     args,
@@ -72,15 +54,13 @@ function parseCliArgs(args: string[]): CliOptions {
       output: { type: 'string', short: 'o', default: 'text' },
       help: { type: 'boolean', short: 'h', default: false },
       version: { type: 'boolean', short: 'v', default: false },
-      port: { type: 'string', short: 'p' },
+      'dry-run': { type: 'boolean', default: false },
     },
     allowPositionals: true,
   })
 
-  // 第一个位置参数是命令
   const command = (positionals[0] as Command) || 'help'
 
-  // --version 标志
   if (values.version) {
     return { command: 'version', output: 'text' as const }
   }
@@ -89,13 +69,10 @@ function parseCliArgs(args: string[]): CliOptions {
     command,
     config: values.config ?? undefined,
     output: values.output as 'text' | 'json',
-    port: values.port ? parseInt(values.port as string, 10) : undefined,
+    dryRun: (values['dry-run'] as boolean) ?? false,
   }
 }
 
-/**
- * run 命令
- */
 async function runCommand(options: CliOptions): Promise<void> {
   if (!options.config) {
     console.error('Error: --config is required')
@@ -104,25 +81,22 @@ async function runCommand(options: CliOptions): Promise<void> {
   }
 
   const configPath = resolve(options.config)
-  console.log(`[backup] Loading config from: ${configPath}`)
+  logger.info('Loading config', { path: configPath })
 
   try {
-    // 1. 扫描配置
     const scanner = createConfigScanner()
     const groups = await scanner.scan(configPath)
 
     if (groups.length === 0) {
-      console.error('Error: No BackupGroup found in config')
+      logger.error('No BackupGroup found in config')
       process.exit(1)
     }
 
-    // 2. 解析配置（加载 Secret）
     const secretResolver = createEnvSecretResolver()
     const resolvedConfigs = await Promise.all(
       groups.map((group) => resolveConfig(group, secretResolver))
     )
 
-    // 3. 执行备份
     for (const config of resolvedConfigs) {
       const executor = createBackupExecutor({
         secretResolver,
@@ -130,23 +104,19 @@ async function runCommand(options: CliOptions): Promise<void> {
         storageDriverFactory: { create: createStorageDriver },
       })
 
-      const result = await executor.execute(config)
+      const result = await executor.executeTo(config, undefined, options.dryRun)
 
-      // 输出结果
       if (options.output === 'json') {
         console.log(JSON.stringify(result, null, 2))
       }
     }
 
   } catch (err) {
-    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`)
+    logger.error('Backup failed', { error: err instanceof Error ? err.message : String(err) })
     process.exit(1)
   }
 }
 
-/**
- * validate 命令
- */
 async function validateCommand(options: CliOptions): Promise<void> {
   if (!options.config) {
     console.error('Error: --config is required')
@@ -162,145 +132,25 @@ async function validateCommand(options: CliOptions): Promise<void> {
     const result = scanner.validate(content)
 
     if (result.valid) {
-      console.log('✓ Config is valid')
+      console.log('Config is valid')
     } else {
-      console.error('✗ Config is invalid:')
+      console.error('Config is invalid:')
       for (const error of result.errors) {
         console.error(`  ${error.path}: ${error.message}`)
       }
       process.exit(1)
     }
   } catch (err) {
-    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`)
+    logger.error('Validation failed', { error: err instanceof Error ? err.message : String(err) })
     process.exit(1)
   }
 }
 
-/**
- * retention 命令
- */
-async function retentionCommand(options: CliOptions, args: string[]): Promise<void> {
-  if (!options.config) {
-    console.error('Error: --config is required')
-    console.error('Usage: backup retention --config <file> [--dry-run]')
-    process.exit(1)
-  }
-
-  const configPath = resolve(options.config)
-  console.log(`[retention] Loading config from: ${configPath}`)
-
-  try {
-    // 解析 --dry-run 参数
-    const dryRun = args.includes('--dry-run') || args.includes('-d')
-    if (dryRun) {
-      console.log('[retention] Dry-run mode enabled (no files will be deleted)')
-    }
-
-    // 1. 扫描配置
-    const scanner = createConfigScanner()
-    const groups = await scanner.scan(configPath)
-
-    if (groups.length === 0) {
-      console.error('Error: No BackupGroup found in config')
-      process.exit(1)
-    }
-
-    // 2. 解析配置（加载 Secret）
-    const secretResolver = createEnvSecretResolver()
-    const resolvedConfigs = await Promise.all(
-      groups.map((group) => resolveConfig(group, secretResolver))
-    )
-
-    // 3. 执行保留策略
-    for (const config of resolvedConfigs) {
-      const retentionExecutor = createRetentionExecutor(createStorageDriver(config))
-      const result = await retentionExecutor.applyRetention(config, { dryRun })
-
-      if (options.output === 'json') {
-        console.log(JSON.stringify(result, null, 2))
-      }
-    }
-
-  } catch (err) {
-    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`)
-    process.exit(1)
-  }
-}
-
-/**
- * serve 命令 - 启动健康检查 HTTP 服务器
- */
-async function serveCommand(options: CliOptions): Promise<void> {
-  if (!options.config) {
-    console.error('Error: --config is required')
-    console.error('Usage: backup serve --config <file> [--port 8080]')
-    process.exit(1)
-  }
-
-  const configPath = resolve(options.config)
-  const port = options.port ?? 8080
-
-  console.log(`[health] Loading config from: ${configPath}`)
-
-  try {
-    // 1. 扫描配置
-    const scanner = createConfigScanner()
-    const groups = await scanner.scan(configPath)
-
-    if (groups.length === 0) {
-      console.error('Error: No BackupGroup found in config')
-      process.exit(1)
-    }
-
-    // 2. 解析配置（加载 Secret）
-    const secretResolver = createEnvSecretResolver()
-    const resolvedConfigs = await Promise.all(
-      groups.map((group) => resolveConfig(group, secretResolver))
-    )
-
-    // 3. 创建数据库驱动（用于 readiness 检查）
-    const databaseDrivers = resolvedConfigs.map((config) => createDatabaseDriver(config))
-
-    // 4. 启动健康检查服务器
-    const server = createHealthServer({
-      port,
-      databaseDrivers,
-    })
-
-    server.listen(port, () => {
-      console.log(`[health] Server listening on port ${port}`)
-      console.log(`[health] Liveness:  GET /health/live`)
-      console.log(`[health] Readiness: GET /health/ready`)
-    })
-
-    // Graceful shutdown
-    const shutdown = () => {
-      console.log('[health] Shutting down...')
-      server.close(() => {
-        console.log('[health] Server closed')
-        process.exit(0)
-      })
-    }
-    process.on('SIGTERM', shutdown)
-    process.on('SIGINT', shutdown)
-
-  } catch (err) {
-    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`)
-    process.exit(1)
-  }
-}
-
-/**
- * version 命令
- */
 function versionCommand(): void {
   console.log('backup v0.1.0')
   console.log('Multi-mode database backup tool')
 }
 
-/**
- * help 命令
- */
 function helpCommand(): void {
   console.log(`
 backup - Multi-mode database backup tool
@@ -310,22 +160,18 @@ Usage:
 
 Commands:
   run          Execute backup
-  retention    Apply retention policy
-  serve        Start health check HTTP server
   validate     Validate config file
   version      Show version
   help         Show this help
 
 Options:
-  -c, --config <file>   Config file path (required for run/retention/serve/validate)
+  -c, --config <file>   Config file path (required for run/validate)
   -o, --output <format> Output format: text (default) or json
-  -p, --port <port>    HTTP server port (default: 8080)
+  --dry-run          Validate dump without uploading
 
 Examples:
   backup run --config backup.yaml
-  backup retention --config backup.yaml
-  backup retention --config backup.yaml --dry-run
-  backup serve --config backup.yaml --port 8080
+  backup run --config backup.yaml --dry-run
   backup validate --config backup.yaml
   backup run --config backup.yaml --output json
 
@@ -334,19 +180,14 @@ For more information, see:
 `)
 }
 
-/**
- * 解析配置（加载 SecretRef）
- */
 async function resolveConfig(
   group: BackupGroup,
   secretResolver: SecretResolver
 ): Promise<ResolvedConfig> {
   const { source, destination } = group.spec
 
-  // 解析数据库密码
   const password = await secretResolver.resolve(source.connection.passwordSecretRef)
 
-  // 解析 S3 密钥
   let resolvedS3Config
   if (destination.type === 's3' && destination.s3) {
     const accessKeyId = await secretResolver.resolve(destination.s3.accessKeySecretRef)
@@ -377,9 +218,6 @@ async function resolveConfig(
   }
 }
 
-/**
- * 创建数据库驱动
- */
 function createDatabaseDriver(config: ResolvedConfig): DatabaseDriver {
   if (config.group.spec.source.type === 'postgresql') {
     return createPostgreSQLDriver(config.connection)
@@ -387,9 +225,6 @@ function createDatabaseDriver(config: ResolvedConfig): DatabaseDriver {
   throw new Error(`Unsupported database type: ${config.group.spec.source.type}`)
 }
 
-/**
- * 创建存储驱动
- */
 function createStorageDriver(config: ResolvedConfig): StorageDriver {
   if (config.group.spec.destination.type === 's3' && config.s3) {
     return createS3StorageDriver(config.s3)
@@ -397,11 +232,10 @@ function createStorageDriver(config: ResolvedConfig): StorageDriver {
   throw new Error(`Unsupported storage type: ${config.group.spec.destination.type}`)
 }
 
-// CLI 入口点
 const isMain = import.meta.url === `file://${process.argv[1]}`
 if (isMain) {
   runCli(process.argv.slice(2)).catch((err) => {
-    console.error(`Fatal error: ${err instanceof Error ? err.message : String(err)}`)
+    logger.error('Fatal error', { error: err instanceof Error ? err.message : String(err) })
     process.exit(1)
   })
 }

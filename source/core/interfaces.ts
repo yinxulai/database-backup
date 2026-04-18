@@ -198,9 +198,10 @@ export interface BackupExecutor {
    * 执行备份并指定输出
    * @param config 已解析的配置
    * @param outputKey 指定的存储 key（可选）
+   * @param dryRun 是否为 dry-run 模式（只验证不上传）
    * @returns 备份结果
    */
-  executeTo(config: ResolvedConfig, outputKey?: string): Promise<BackupResult>
+  executeTo(config: ResolvedConfig, outputKey?: string, dryRun?: boolean): Promise<BackupResult>
 }
 
 /**

@@ -1,7 +1,6 @@
 /**
- * 备份执行器
- * 
- * 核心备份执行逻辑，协调扫描、dump、压缩、上传流程
+ * @fileoverview Backup executor implementation
+ * @module @taicode/backup/core/executor
  */
 
 import { randomUUID } from 'node:crypto'
@@ -20,9 +19,10 @@ import type {
   BackupError,
   BackupErrorCode,
 } from './interfaces.js'
+import { createLogger, type Logger } from './logger.js'
 
 /**
- * 默认重试配置
+ * Default retry configuration
  */
 const DEFAULT_RETRY_CONFIG = {
   maxAttempts: 3,
@@ -31,16 +31,13 @@ const DEFAULT_RETRY_CONFIG = {
 }
 
 /**
- * 备份执行错误
+ * Backup execution error
  */
 export class BackupExecutionError extends Error {
   constructor(
-    /** 错误代码 */
     public readonly code: BackupErrorCode,
-    /** 任务名称 */
     public readonly taskName: string,
     message: string,
-    /** 原始错误 */
     public readonly cause?: Error
   ) {
     super(message)
@@ -49,24 +46,34 @@ export class BackupExecutionError extends Error {
 }
 
 /**
- * 备份执行器实现
+ * Default backup executor implementation
  */
 export class DefaultBackupExecutor implements BackupExecutor {
   private retryConfig = DEFAULT_RETRY_CONFIG
+  private logger: Logger
 
-  constructor(private options: BackupExecutorOptions) {}
+  constructor(
+    private options: BackupExecutorOptions,
+    logger?: Logger
+  ) {
+    this.logger = logger ?? createLogger()
+  }
 
   /**
-   * 执行备份
+   * Execute backup
    */
   async execute(config: ResolvedConfig): Promise<BackupResult> {
     return this.executeTo(config)
   }
 
   /**
-   * 执行备份并指定输出 key
+   * Execute backup with custom output key
+   * @param dryRun If true, validates dump without uploading
    */
-  async executeTo(config: ResolvedConfig, outputKey?: string): Promise<BackupResult> {
+  async executeTo(config: ResolvedConfig, outputKey?: string, dryRun = false): Promise<BackupResult> {
+    const requestId = randomUUID()
+    const log = this.logger.child(requestId)
+
     const result: BackupResult = {
       id: randomUUID(),
       taskName: config.group.metadata.name,
@@ -76,27 +83,26 @@ export class DefaultBackupExecutor implements BackupExecutor {
 
     const { source, destination } = config.group.spec
 
-    // 创建数据库驱动
+    // Create database and storage drivers
     const dbDriver = this.options.databaseDriverFactory.create(config)
-    // 创建存储驱动
     const storageDriver = this.options.storageDriverFactory.create(config)
 
     try {
-      // 1. 测试连接
-      console.log(`[backup] Testing connection to ${source.type}...`)
+      // 1. Test connection
+      log.info('Testing database connection', { type: source.type, database: source.database })
       const connected = await dbDriver.testConnection()
       if (!connected) {
-        throw new BackupExecutionError('CONNECTION_FAILED', config.group.metadata.name, '数据库连接失败')
+        throw new BackupExecutionError('CONNECTION_FAILED', config.group.metadata.name, 'Database connection failed')
       }
-      console.log(`[backup] ✓ Connected`)
+      log.info('Database connection successful')
 
-      // 2. 生成文件 key
+      // 2. Generate file key
       const fileKey = outputKey ?? this.generateFileKey(config)
       result.fileKey = fileKey
       result.tables = source.tables ?? []
 
-      // 3. 执行 dump
-      console.log(`[backup] Dumping ${source.type}://${source.database}...`)
+      // 3. Execute dump
+      log.info('Starting database dump', { database: source.database, tables: result.tables })
       const tables = source.tables ?? []
       const compression: 'gzip' | 'none' | undefined = destination.type === 's3' ? 'gzip' : undefined
       const dumpOptions = {
@@ -107,24 +113,35 @@ export class DefaultBackupExecutor implements BackupExecutor {
       }
       const dumpStream = await this.withRetry(
         () => dbDriver.dump(dumpOptions),
-        'DUMP_FAILED'
+        'DUMP_FAILED',
+        log
       )
-      console.log(`[backup] ✓ Dump completed`)
+      log.info('Database dump completed')
 
-      // 4. 计算 checksum
-      console.log(`[backup] Computing checksum...`)
+      // 4. Compute checksum
+      log.info('Computing checksum')
       const checksum = await this.computeChecksum(dumpStream)
       result.checksum = checksum
-      console.log(`[backup] ✓ Checksum: ${checksum}`)
+      log.info('Checksum computed', { checksum })
 
-      // 5. 重新获取 dump 流（因为 computeChecksum 消费了它）
+      // 5. Dry-run: validate without uploading
+      if (dryRun) {
+        result.status = 'dry-run-completed'
+        result.endTime = new Date()
+        result.duration = Math.round((result.endTime.getTime() - result.startTime.getTime()) / 1000)
+        log.info('Dry-run completed: dump is valid', { checksum, key: fileKey })
+        return result
+      }
+
+      // 6. Get fresh dump stream for upload (previous was consumed by checksum)
       const dumpStreamForUpload = await dbDriver.dump(dumpOptions)
 
-      // 6. 上传到存储
-      console.log(`[backup] Uploading to ${destination.type}...`)
+      // 7. Upload to storage
+      log.info('Uploading backup', { destination: destination.type, key: fileKey })
       const uploadResult = await this.withRetry(
         () => storageDriver.upload(dumpStreamForUpload, fileKey),
-        'UPLOAD_FAILED'
+        'UPLOAD_FAILED',
+        log
       )
 
       result.size = uploadResult.size
@@ -132,10 +149,13 @@ export class DefaultBackupExecutor implements BackupExecutor {
       result.endTime = new Date()
       result.duration = Math.round((result.endTime.getTime() - result.startTime.getTime()) / 1000)
 
-      console.log(`[backup] ✓ Uploaded to ${uploadResult.key} (${this.formatSize(uploadResult.size)})`)
-      console.log(`[backup] ✓ Backup completed in ${result.duration}s`)
+      log.info('Backup completed', {
+        key: uploadResult.key,
+        size: uploadResult.size,
+        duration: result.duration
+      })
 
-      // 7. 保存结果
+      // 8. Save result
       if (this.options.resultStore) {
         await this.options.resultStore.save(result)
       }
@@ -148,9 +168,9 @@ export class DefaultBackupExecutor implements BackupExecutor {
       result.duration = Math.round((result.endTime.getTime() - result.startTime.getTime()) / 1000)
       result.error = err instanceof Error ? err.message : String(err)
 
-      console.error(`[backup] ✗ Backup failed: ${result.error}`)
+      log.error('Backup failed', { error: result.error, code: (err as BackupExecutionError).code })
 
-      // 保存失败结果
+      // Save failed result
       if (this.options.resultStore) {
         await this.options.resultStore.save(result)
       }
@@ -163,7 +183,7 @@ export class DefaultBackupExecutor implements BackupExecutor {
   }
 
   /**
-   * 生成文件 key
+   * Generate file key for backup
    */
   private generateFileKey(config: ResolvedConfig): string {
     const { source, destination } = config.group.spec
@@ -174,7 +194,6 @@ export class DefaultBackupExecutor implements BackupExecutor {
     let key = `${source.type}-${source.database}-${date}-${time}.sql`
 
     if (destination.type === 's3' && destination.s3?.pathPrefix) {
-      // 简单替换变量
       let prefix = destination.s3.pathPrefix
       prefix = prefix.replace('{{.Database}}', source.database)
       prefix = prefix.replace('{{.Schema}}', source.schema ?? 'public')
@@ -184,14 +203,13 @@ export class DefaultBackupExecutor implements BackupExecutor {
       key = `${prefix}/${key}`
     }
 
-    // 添加 .gz 后缀
     key += '.gz'
 
     return key
   }
 
   /**
-   * 计算 SHA256 checksum
+   * Compute SHA256 checksum
    */
   private async computeChecksum(stream: Readable): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -204,11 +222,12 @@ export class DefaultBackupExecutor implements BackupExecutor {
   }
 
   /**
-   * 带重试的执行
+   * Execute with retry
    */
   private async withRetry<T>(
     fn: () => Promise<T>,
-    errorCode: BackupErrorCode
+    errorCode: BackupErrorCode,
+    log: Logger
   ): Promise<T> {
     let lastError: Error | undefined
     let delay = this.retryConfig.initialDelayMs
@@ -220,7 +239,11 @@ export class DefaultBackupExecutor implements BackupExecutor {
         lastError = err instanceof Error ? err : new Error(String(err))
         
         if (attempt < this.retryConfig.maxAttempts) {
-          console.log(`[backup] Retry in ${delay}ms (attempt ${attempt}/${this.retryConfig.maxAttempts})`)
+          log.warn('Retrying operation', {
+            delay,
+            attempt,
+            maxAttempts: this.retryConfig.maxAttempts
+          })
           await this.sleep(delay)
           delay *= this.retryConfig.backoffMultiplier
         }
@@ -231,26 +254,16 @@ export class DefaultBackupExecutor implements BackupExecutor {
   }
 
   /**
-   * 睡眠
+   * Sleep
    */
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms))
   }
-
-  /**
-   * 格式化文件大小
-   */
-  private formatSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
-    return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`
-  }
 }
 
 /**
- * 创建备份执行器
+ * Create backup executor
  */
-export function createBackupExecutor(options: BackupExecutorOptions): BackupExecutor {
-  return new DefaultBackupExecutor(options)
+export function createBackupExecutor(options: BackupExecutorOptions, logger?: Logger): BackupExecutor {
+  return new DefaultBackupExecutor(options, logger)
 }
