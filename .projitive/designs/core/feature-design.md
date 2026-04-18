@@ -127,7 +127,7 @@ docker run \
 
 **使用示例**：
 ```yaml
-apiVersion: backup.yinxulai/v1
+apiVersion: database-backup.yinxulai/v1
 kind: BackupGroup
 metadata:
   name: myapp-backups
@@ -280,7 +280,7 @@ $ db-backup run --config ./backup.yaml --task users-backup
 
 K8s 模式下，结果会记录在 BackupResult CR 中：
 ```yaml
-apiVersion: backup.yinxulai/v1
+apiVersion: database-backup.yinxulai/v1
 kind: BackupResult
 metadata:
   name: users-backup-20260418-100600
@@ -303,7 +303,7 @@ spec:
 
 ```yaml
 # backup-minimal.yaml
-apiVersion: backup.yinxulai/v1
+apiVersion: database-backup.yinxulai/v1
 kind: BackupGroup
 metadata:
   name: minimal-backup
@@ -340,7 +340,7 @@ spec:
 
 ```yaml
 # backup-group.yaml
-apiVersion: backup.yinxulai/v1
+apiVersion: database-backup.yinxulai/v1
 kind: BackupGroup
 metadata:
   name: myapp-backup-group

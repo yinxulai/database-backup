@@ -8,7 +8,7 @@
 #   AWS_ACCESS_KEY_ID=xxx
 #   AWS_SECRET_ACCESS_KEY=xxx
 
-apiVersion: backup.yinxulai/v1
+apiVersion: database-backup.yinxulai/v1
 kind: BackupGroup
 metadata:
   name: example-postgres-backup

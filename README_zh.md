@@ -29,7 +29,7 @@ yarn add @yinxulai/database-backup
 
 ```yaml
 # backup.yaml
-apiVersion: backup.yinxulai/v1
+apiVersion: database-backup.yinxulai/v1
 kind: BackupGroup
 metadata:
   name: my-database-backup
@@ -73,7 +73,7 @@ backup run --config backup.yaml
 ### BackupGroup 结构
 
 ```yaml
-apiVersion: backup.yinxulai/v1
+apiVersion: database-backup.yinxulai/v1
 kind: BackupGroup
 metadata:
   name: 备份组名称
@@ -188,7 +188,7 @@ schedule: "0 2 * * *"  # 每天凌晨 2 点
 
 config:
   content: |
-    apiVersion: backup.yinxulai/v1
+    apiVersion: database-backup.yinxulai/v1
     kind: BackupGroup
     metadata:
       name: my-backup

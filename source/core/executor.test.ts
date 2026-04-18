@@ -67,7 +67,7 @@ describe('DefaultBackupExecutor', () => {
 
   const createMockConfig = (): ResolvedConfig => ({
     group: {
-      apiVersion: 'backup.yinxulai/v1',
+      apiVersion: 'database-backup.yinxulai/v1',
       kind: 'BackupGroup',
       metadata: { name: 'test-backup' },
       spec: {

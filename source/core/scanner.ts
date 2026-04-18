@@ -93,10 +93,10 @@ export class YamlConfigScanner implements ConfigScanner {
     const prefix = Array.isArray(config) ? `[${index}]` : ''
 
     // apiVersion
-    if (config.apiVersion !== 'backup.yinxulai/v1') {
+    if (config.apiVersion !== 'database-backup.yinxulai/v1') {
       errors.push({
         path: `${prefix}apiVersion`,
-        message: `apiVersion 必须是 "backup.yinxulai/v1"，当前为 "${config.apiVersion}"`,
+        message: `apiVersion 必须是 "database-backup.yinxulai/v1"，当前为 "${config.apiVersion}"`,
       })
     }
 

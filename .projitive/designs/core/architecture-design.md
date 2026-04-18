@@ -136,7 +136,7 @@ backup/
 
 ```typescript
 interface BackupGroup {
-  apiVersion: 'backup.yinxulai/v1'
+  apiVersion: 'database-backup.yinxulai/v1'
   kind: 'BackupGroup'
   metadata: {
     name: string
@@ -194,7 +194,7 @@ type StorageType = 's3' | 'gcs' | 'azure' | 'local'
 ### 5.2 完整配置示例
 
 ```yaml
-apiVersion: backup.yinxulai/v1
+apiVersion: database-backup.yinxulai/v1
 kind: BackupGroup
 metadata:
   name: myapp-postgres-backup

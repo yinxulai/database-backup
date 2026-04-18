@@ -34,7 +34,7 @@ BackupGroup = 一个数据库实例的备份配置
 ### 3.1 YAML 格式
 
 ```yaml
-apiVersion: backup.yinxulai/v1
+apiVersion: database-backup.yinxulai/v1
 kind: BackupGroup
 metadata:
   name: myapp-postgres-backup
@@ -205,7 +205,7 @@ helm install postgres-analytics ./backup \
 
 ```yaml
 # base/backupgroup.yaml
-apiVersion: backup.yinxulai/v1
+apiVersion: database-backup.yinxulai/v1
 kind: BackupGroup
 metadata:
   name: backup
@@ -229,7 +229,7 @@ patches:
 ### 8.1 最小配置
 
 ```yaml
-apiVersion: backup.yinxulai/v1
+apiVersion: database-backup.yinxulai/v1
 kind: BackupGroup
 metadata:
   name: minimal-backup
@@ -256,7 +256,7 @@ spec:
 ### 8.2 生产配置
 
 ```yaml
-apiVersion: backup.yinxulai/v1
+apiVersion: database-backup.yinxulai/v1
 kind: BackupGroup
 metadata:
   name: prod-users-backup
