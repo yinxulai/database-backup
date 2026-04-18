@@ -79,3 +79,76 @@
 - roadmapRefs: ROADMAP-PH1
 - links:
   - tests/e2e/
+
+## Feature: Observability
+
+### TASK-PH2-001 | TODO | 实现结构化 JSON 日志
+- summary: 实现 JSON 结构化日志输出，支持日志级别（debug/info/warn/error）、requestId、timestamp、duration 等字段
+- priority: high
+- owner: 
+- roadmapRefs: ROADMAP-PH2
+- labels:
+  - observability
+  - logging
+- links:
+  - source/core/logger.ts
+
+### TASK-PH2-002 | TODO | 实现 Prometheus Metrics 上报
+- summary: 实现 Prometheus 指标上报，支持备份成功/失败/耗时/大小等指标
+- priority: medium
+- owner: 
+- roadmapRefs: ROADMAP-PH2
+- labels:
+  - observability
+  - metrics
+- links:
+  - source/core/metrics.ts
+
+### TASK-PH2-003 | TODO | 实现健康检查接口
+- summary: 实现 /health 端点，支持 liveness 和 readiness probe
+- priority: medium
+- owner: 
+- roadmapRefs: ROADMAP-PH2
+- labels:
+  - observability
+  - health
+- links:
+  - source/cli/run.ts
+
+## Feature: Restore
+
+### TASK-PH2-004 | TODO | 实现备份恢复功能
+- summary: 实现 pg_restore 备份恢复，支持指定时间点恢复
+- priority: high
+- owner: 
+- roadmapRefs: ROADMAP-PH2
+- labels:
+  - restore
+  - core
+- links:
+  - source/adapters/database/postgresql.ts
+  - source/core/executor.ts
+
+### TASK-PH2-005 | TODO | 实现备份验证
+- summary: 实现备份上传前的 dry-run 验证，确保 dump 可读
+- priority: medium
+- owner: 
+- roadmapRefs: ROADMAP-PH2
+- labels:
+  - backup
+  - validation
+- links:
+  - source/adapters/database/postgresql.ts
+
+## Feature: Retention
+
+### TASK-PH2-006 | TODO | 实现备份保留策略
+- summary: 实现基于时间和数量的备份保留策略，自动清理过期备份
+- priority: medium
+- owner: 
+- roadmapRefs: ROADMAP-PH2
+- labels:
+  - retention
+  - storage
+- links:
+  - source/adapters/storage/s3.ts
