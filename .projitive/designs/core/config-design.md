@@ -169,7 +169,6 @@ passwordSecretRef:
 | 变量 | 说明 | 示例 |
 |------|------|------|
 | `{{.Database}}` | 数据库名称 | `app` |
-| `{{.Schema}}` | Schema 名称 | `public` |
 | `{{.Date}}` | 日期（YYYY-MM-DD） | `2026-04-18` |
 | `{{.Time}}` | 时间（HH-mm-ss） | `02-00-00` |
 | `{{.Type}}` | 数据库类型 | `postgresql` |

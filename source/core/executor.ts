@@ -312,7 +312,6 @@ export class DefaultBackupExecutor implements BackupExecutor {
 
     const renderedPathPrefix = config.s3.pathPrefix
       .replaceAll('{{.Database}}', source.database)
-      .replaceAll('{{.Schema}}', this.resolveSchemaPlaceholder(source.tables))
       .replaceAll('{{.Date}}', date)
       .replaceAll('{{.Time}}', time)
       .replaceAll('{{.Type}}', source.type)
@@ -324,30 +323,6 @@ export class DefaultBackupExecutor implements BackupExecutor {
         pathPrefix: renderedPathPrefix,
       },
     }
-  }
-
-  /**
-   * Resolve a schema label for optional pathPrefix templating.
-   */
-  private resolveSchemaPlaceholder(tables?: string[]): string {
-    if (!tables || tables.length === 0) {
-      return 'all-schemas'
-    }
-
-    const schemas = new Set<string>()
-
-    for (const table of tables) {
-      const normalized = table.trim()
-      const separatorIndex = normalized.indexOf('.')
-
-      if (separatorIndex <= 0) {
-        return 'mixed-schemas'
-      }
-
-      schemas.add(normalized.slice(0, separatorIndex))
-    }
-
-    return schemas.size === 1 ? [...schemas][0]! : 'mixed-schemas'
   }
 
   /**

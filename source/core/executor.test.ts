@@ -147,13 +147,12 @@ describe('DefaultBackupExecutor', () => {
 
   it('should use pathPrefix in file key when provided', async () => {
     const config = createMockConfig()
-    config.config.destination.s3!.pathPrefix = '{{.Schema}}/{{.Database}}/{{.Date}}'
-    config.s3!.pathPrefix = '{{.Schema}}/{{.Database}}/{{.Date}}'
+    config.config.destination.s3!.pathPrefix = '{{.Database}}/{{.Date}}'
+    config.s3!.pathPrefix = '{{.Database}}/{{.Date}}'
 
     const result = await executor.execute(config)
 
-    expect(result.fileKey).toContain('public/testdb/')
-    expect(result.fileKey).not.toContain('{{.Schema}}')
+    expect(result.fileKey).toContain('testdb/')
     expect(result.fileKey).not.toContain('{{.Database}}')
     expect(result.fileKey).not.toContain('{{.Date}}')
   })
