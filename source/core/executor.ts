@@ -68,6 +68,7 @@ export class DefaultBackupExecutor implements BackupExecutor {
 
     const effectiveConfig = this.prepareRuntimeConfig(config, result.startTime)
     const { source, destination } = effectiveConfig.config
+    const databaseName = effectiveConfig.connection.database
 
     // Create database and storage drivers
     const dbDriver = this.options.databaseDriverFactory.create(effectiveConfig)
@@ -75,7 +76,7 @@ export class DefaultBackupExecutor implements BackupExecutor {
 
     try {
       // 1. Test connection
-      log.info('Testing database connection', { type: source.type, database: source.database })
+      log.info('Testing database connection', { type: source.type, database: databaseName })
       const connected = await dbDriver.testConnection()
       if (!connected) {
         throw new BackupExecutionError('CONNECTION_FAILED', config.config.name, 'Database connection failed')
@@ -88,11 +89,11 @@ export class DefaultBackupExecutor implements BackupExecutor {
       result.tables = source.tables ?? []
 
       // 3. Execute dump
-      log.info('Starting database dump', { database: source.database, tables: result.tables })
+      log.info('Starting database dump', { database: databaseName, tables: result.tables })
       const tables = source.tables ?? []
       const compression: 'gzip' | 'none' | undefined = destination.type === 's3' ? 'gzip' : undefined
       const dumpOptions = {
-        database: source.database,
+        database: databaseName,
         tables,
         compression,
       }
@@ -284,10 +285,11 @@ export class DefaultBackupExecutor implements BackupExecutor {
    */
   private generateFileKey(config: ResolvedConfig, now = new Date()): string {
     const { source } = config.config
+    const databaseName = config.connection.database
     const date = now.toISOString().split('T')[0]
     const time = now.toTimeString().split(' ')[0].replace(/:/g, '-')
 
-    let key = `${source.type}-${source.database}-${date}-${time}.sql`
+    let key = `${source.type}-${databaseName}-${date}-${time}.sql`
 
     if (config.s3?.pathPrefix) {
       key = `${config.s3.pathPrefix}/${key}`
@@ -309,9 +311,10 @@ export class DefaultBackupExecutor implements BackupExecutor {
     const date = now.toISOString().split('T')[0]
     const time = now.toTimeString().split(' ')[0].replace(/:/g, '-')
     const { source } = config.config
+    const databaseName = config.connection.database
 
     const renderedPathPrefix = config.s3.pathPrefix
-      .replaceAll('{{.Database}}', source.database)
+      .replaceAll('{{.Database}}', databaseName)
       .replaceAll('{{.Date}}', date)
       .replaceAll('{{.Time}}', time)
       .replaceAll('{{.Type}}', source.type)

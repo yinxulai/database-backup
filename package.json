@@ -1,6 +1,6 @@
 {
   "name": "@yinxulai/database-backup",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Multi-mode database backup tool with CI-first architecture",
   "type": "module",
   "bin": {

@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import type { ResolvedConfig } from './types.js'
+import type { DumpOptions, ResolvedConfig } from './types.js'
 import type { DatabaseDriver, StorageDriver, StorageObject } from './interfaces.js'
 import { DefaultBackupExecutor } from './executor.js'
 import { Readable } from 'node:stream'
@@ -13,13 +13,15 @@ class MockDatabaseDriver implements DatabaseDriver {
   readonly type = 'postgresql'
   private connected = true
   private dumpCalled = false
+  private lastDumpOptions?: DumpOptions
 
   testConnection(): Promise<boolean> {
     return Promise.resolve(this.connected)
   }
 
-  dump(): Promise<Readable> {
+  dump(options: DumpOptions): Promise<Readable> {
     this.dumpCalled = true
+    this.lastDumpOptions = options
     return Promise.resolve(Readable.from(['mock dump data']))
   }
 
@@ -29,6 +31,10 @@ class MockDatabaseDriver implements DatabaseDriver {
 
   wasDumpCalled(): boolean {
     return this.dumpCalled
+  }
+
+  getLastDumpOptions(): DumpOptions | undefined {
+    return this.lastDumpOptions
   }
 }
 
@@ -155,6 +161,21 @@ describe('DefaultBackupExecutor', () => {
     expect(result.fileKey).toContain('testdb/')
     expect(result.fileKey).not.toContain('{{.Database}}')
     expect(result.fileKey).not.toContain('{{.Date}}')
+  })
+
+  it('should use the resolved connection database for dump and file key generation', async () => {
+    const config = createMockConfig()
+    config.config.source.database = 'postgres'
+    config.connection.database = 'taicode-labs'
+    config.config.destination.s3!.pathPrefix = '{{.Database}}/{{.Date}}'
+    config.s3!.pathPrefix = '{{.Database}}/{{.Date}}'
+
+    const result = await executor.execute(config)
+
+    expect(mockDbDriver.getLastDumpOptions()?.database).toBe('taicode-labs')
+    expect(result.fileKey).toContain('taicode-labs/')
+    expect(result.fileKey).toContain('postgresql-taicode-labs-')
+    expect(result.fileKey).not.toContain('postgres/')
   })
 
   it('should call database dump', async () => {
