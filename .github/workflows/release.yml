@@ -7,9 +7,11 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
-  release:
+  # Build and test
+  build:
     runs-on: ubuntu-latest
     
     steps:
@@ -46,21 +48,148 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ steps.version.outputs.VERSION }}
+          path: |
+            output/**/*
+            out/backup-*
+
+  # Build and push Docker image to GitHub Container Registry
+  container:
+    runs-on: ubuntu-latest
+    needs: build
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Build SEA binary
+        run: pnpm build:sea
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.VERSION }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ghcr.io/${{ github.repository }}:${{ steps.version.outputs.VERSION }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ steps.version.outputs.VERSION }}
+          path: sbom.spdx.json
+
+  # Create GitHub Release
+  release:
+    runs-on: ubuntu-latest
+    needs: [build, container]
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ steps.version.outputs.VERSION }}
+          path: dist
+
+      - name: Download SBOM
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom-${{ steps.version.outputs.VERSION }}
+          path: dist
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           version: ${{ steps.version.outputs.VERSION }}
           generate_release_notes: true
           files: |
-            out/backup-*-${{ steps.version.outputs.VERSION }}*
-            output/**/*
+            dist/**/*
+          body: |
+            ## Installation
+
+            Download the binary for your platform:
+
+            | Platform | Architecture | Download |
+            |----------|--------------|----------|
+            | Linux | x64 | `backup-{version}-linux-x64` |
+            | macOS | arm64 | `backup-{version}-darwin-arm64` |
+            | Windows | x64 | `backup-{version}-windows-x64.exe` |
+
+            ## Docker Image
+
+            ```bash
+            docker pull ghcr.io/${{ github.repository }}:{version}
+            ```
+
+            ## Container Image Tags
+
+            - `ghcr.io/${{ github.repository }}:{version}` - Specific version
+            - `ghcr.io/${{ github.repository }}:{major}.{minor}` - Minor version
+            - `ghcr.io/${{ github.repository }}:{major}` - Major version
+            - `ghcr.io/${{ github.repository }}:latest` - Latest release
+
+            ## What's Changed
+
+            See [CHANGELOG](./CHANGELOG.md) for details.
           env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: out/backup-${{ steps.version.outputs.VERSION }}-linux-x64
-          asset_name: backup-${{ steps.version.outputs.VERSION }}-linux-x64
-          asset_content_type: application/octet-stream
