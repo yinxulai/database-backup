@@ -4,17 +4,17 @@
     {
       "id": "TASK-0001",
       "title": "Initialize project architecture document",
-      "status": "TODO",
+      "status": "DONE",
       "owner": "unassigned",
       "summary": "Establish system context, boundaries, modules, and integration flows in designs/core/architecture.md.",
-      "updatedAt": "2026-04-18T01:35:04.468Z",
+      "updatedAt": "2026-04-18T02:25:02.739Z",
       "links": [
         "designs/core/architecture.md"
       ],
       "roadmapRefs": [
         "ROADMAP-0001"
       ],
-      "recordVersion": 1
+      "recordVersion": 3
     },
     {
       "id": "TASK-0002",
@@ -58,7 +58,7 @@
     }
   ],
   "meta": {
-    "tasks_version": 5,
+    "tasks_version": 7,
     "roadmaps_version": 1,
     "store_schema_version": 3
   },
@@ -66,9 +66,9 @@
     "tasks_markdown": {
       "name": "tasks_markdown",
       "dirty": false,
-      "lastSourceVersion": 5,
-      "lastBuiltAt": "2026-04-18T01:50:05.875Z",
-      "recordVersion": 15
+      "lastSourceVersion": 7,
+      "lastBuiltAt": "2026-04-18T02:25:02.750Z",
+      "recordVersion": 21
     },
     "roadmaps_markdown": {
       "name": "roadmaps_markdown",
