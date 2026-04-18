@@ -1,0 +1,94 @@
+{{/*
+Database Backup CronJob installed
+*/}}
+{{- if .Release.IsInstall }}
+
+## Congratulations! Database Backup CronJob has been installed.
+
+### Next steps:
+
+1. **Configure your backup** by setting `.Values.config.content` with your BackupGroup YAML.
+
+2. **Create required secrets** for database passwords and S3 credentials:
+   ```bash
+   # Create a secret for database password
+   kubectl create secret generic postgres-secret \
+     --from-literal=password=your-password
+
+   # Create a secret for AWS credentials
+   kubectl create secret generic aws-secret \
+     --from-literal=access-key-id=YOUR_ACCESS_KEY \
+     --from-literal=secret-access-key=YOUR_SECRET_KEY
+   ```
+
+3. **Update your values** with the secret names:
+   ```yaml
+   # values.yaml or --set flags
+   config:
+     content: |
+       # Your BackupGroup config here
+       # Use type: k8s with secretName/secretKey instead of env
+
+   env:
+     - name: AWS_ACCESS_KEY_ID
+       valueFrom:
+         secretKeyRef:
+           name: aws-secret
+           key: access-key-id
+     - name: AWS_SECRET_ACCESS_KEY
+       valueFrom:
+         secretKeyRef:
+           name: aws-secret
+           key: secret-access-key
+   ```
+
+4. **Upgrade the release** after configuration:
+   ```bash
+   helm upgrade {{ .Release.Name }} . -f values.yaml
+   ```
+
+5. **Check the CronJob**:
+   ```bash
+   kubectl get cronjob {{ include "database-backup.fullname" . }}
+   ```
+
+{{- else if .Release.IsUpgrade }}
+
+## Database Backup CronJob has been upgraded!
+
+{{- end }}
+
+### CronJob Details
+
+- **Schedule**: {{ .Values.schedule }} ({{ .Values.timezone }})
+- **Concurrency Policy**: {{ .Values.concurrencyPolicy }}
+- **History Limits**: {{ .Values.successfulJobsHistoryLimit }} successful, {{ .Values.failedJobsHistoryLimit }} failed
+
+### Useful Commands
+
+```bash
+# View CronJob
+kubectl get cronjob {{ include "database-backup.fullname" . }}
+
+# View next scheduled run
+kubectl get cronjob {{ include "database-backup.fullname" . }} -o jsonpath='{.status}'
+
+# Manually trigger a backup (create job immediately)
+kubectl create job --from=cronjob/{{ include "database-backup.fullname" . }} manual-backup-$(date +%s)
+
+# View backup logs
+kubectl logs -l app.kubernetes.io/name={{ include "database-backup.name" . }}
+
+# Uninstall
+helm uninstall {{ .Release.Name }}
+```
+
+{{/*
+Show config status
+*/}}
+{{- if not .Values.config.content }}
+{{- "\n" -}}
+{{/* Warning */}}
+{{- print "\n[WARNING] No backup configuration found! " -}}
+{{- print "Set .Values.config.content to configure your backup.\n" -}}
+{{- end }}

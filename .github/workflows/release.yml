@@ -56,6 +56,34 @@ jobs:
             output/**/*
             out/backup-*
 
+  # Package Helm chart
+  helm:
+    runs-on: ubuntu-latest
+    needs: build
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14
+
+      - name: Create Helm package
+        run: |
+          helm package helm/database-backup --version ${{ steps.version.outputs.VERSION }} --app-version ${{ steps.version.outputs.VERSION }}
+
+      - name: Upload Helm package
+        uses: actions/upload-artifact@v4
+        with:
+          name: helm-${{ steps.version.outputs.VERSION }}
+          path: database-backup-${{ steps.version.outputs.VERSION }}.tgz
+
   # Build and push Docker image to GitHub Container Registry
   container:
     runs-on: ubuntu-latest
@@ -135,7 +163,7 @@ jobs:
   # Create GitHub Release
   release:
     runs-on: ubuntu-latest
-    needs: [build, container]
+    needs: [build, helm, container]
     
     steps:
       - name: Checkout
@@ -145,10 +173,16 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: Download artifacts
+      - name: Download dist artifacts
         uses: actions/download-artifact@v4
         with:
           name: dist-${{ steps.version.outputs.VERSION }}
+          path: dist
+
+      - name: Download Helm package
+        uses: actions/download-artifact@v4
+        with:
+          name: helm-${{ steps.version.outputs.VERSION }}
           path: dist
 
       - name: Download SBOM
@@ -167,6 +201,8 @@ jobs:
           body: |
             ## Installation
 
+            ### Binary
+
             Download the binary for your platform:
 
             | Platform | Architecture | Download |
@@ -175,18 +211,33 @@ jobs:
             | macOS | arm64 | `backup-{version}-darwin-arm64` |
             | Windows | x64 | `backup-{version}-windows-x64.exe` |
 
-            ## Docker Image
+            ### Docker
 
             ```bash
             docker pull ghcr.io/${{ github.repository }}:{version}
             ```
 
+            ### Helm Chart
+
+            ```bash
+            helm repo add database-backup https://yinxulai.github.io/database-backup
+            helm install database-backup database-backup/database-backup --version {version}
+            ```
+
+            Or install from the release attachment:
+
+            ```bash
+            helm install database-backup database-backup-{version}.tgz
+            ```
+
             ## Container Image Tags
 
-            - `ghcr.io/${{ github.repository }}:{version}` - Specific version
-            - `ghcr.io/${{ github.repository }}:{major}.{minor}` - Minor version
-            - `ghcr.io/${{ github.repository }}:{major}` - Major version
-            - `ghcr.io/${{ github.repository }}:latest` - Latest release
+            | Tag | Description |
+            |-----|-------------|
+            | `ghcr.io/${{ github.repository }}:{version}` | Specific version |
+            | `ghcr.io/${{ github.repository }}:{major}.{minor}` | Minor version |
+            | `ghcr.io/${{ github.repository }}:{major}` | Major version |
+            | `ghcr.io/${{ github.repository }}:latest` | Latest release |
 
             ## What's Changed
 

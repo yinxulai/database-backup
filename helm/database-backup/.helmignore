@@ -1,0 +1,44 @@
+# Patterns to ignore when building packages.
+# This supports shell glob matching
+
+# Git files
+.git
+.gitignore
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.gitlab
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files
+tests/
+*.test.*
+*_test.go
+
+# Documentation
+README.md
+CHANGELOG.md
+LICENSE
+
+# Local files
+*.local
+*.tmp
+
+# Build outputs
+output/
+dist/
+out/
+sea/
+
+# Node modules
+node_modules/
