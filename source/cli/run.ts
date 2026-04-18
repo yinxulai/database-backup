@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 
 import { parseArgs } from 'node:util'
 import { resolve } from 'node:path'
@@ -222,7 +223,7 @@ async function restoreCommand(options: CliOptions): Promise<void> {
 }
 
 function versionCommand(): void {
-  console.log('backup v0.1.0')
+  console.log('backup v0.2.0')
   console.log('Multi-mode database backup tool')
 }
 

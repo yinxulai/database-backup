@@ -73,10 +73,9 @@ spec:
             - name: {{ .Chart.Name }}
               image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
               imagePullPolicy: {{ .Values.image.pullPolicy }}
-              command:
-                - pnpm
-                - backup
-                - --
+              # The image entrypoint already launches the bundled backup CLI.
+              # Only pass the subcommand arguments here.
+              args:
                 - run
                 - --config
                 - /config/backup.yaml

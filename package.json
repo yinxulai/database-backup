@@ -1,17 +1,19 @@
 {
   "name": "@yinxulai/database-backup",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Multi-mode database backup tool with CI-first architecture",
   "type": "module",
   "bin": {
-    "backup": "./source/cli/run.ts"
+    "backup": "./output/run.js"
   },
   "scripts": {
+    "build": "rm -rf output && tsup source/cli/run.ts --format esm --platform node --target node22 --out-dir output --clean --splitting false",
+    "prepack": "pnpm build",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "dev": "tsx source/cli/run.ts",
-    "backup": "tsx source/cli/run.ts",
+    "backup": "node output/run.js",
     "lint": "eslint source --ext .ts"
   },
   "engines": {
@@ -25,10 +27,10 @@
     "@eslint/js": "^10.0.1",
     "@types/node": "^25.6.0",
     "eslint": "^10.2.1",
+    "tsup": "^8.5.1",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.58.2",
-    "vite": "^8.0.8",
     "vitest": "^4.1.4"
   },
   "keywords": [
