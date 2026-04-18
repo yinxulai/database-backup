@@ -51,6 +51,10 @@ class MockStorageDriver implements StorageDriver {
     return Promise.resolve()
   }
 
+  list(_prefix?: string): Promise<import('./interfaces.js').StorageObject[]> {
+    return Promise.resolve([])
+  }
+
   getUploadedKey(): string | null {
     return this.uploadedKey
   }
@@ -206,5 +210,14 @@ describe('DefaultBackupExecutor', () => {
 
     expect(result.size).toBeDefined()
     expect(typeof result.size).toBe('number')
+  })
+
+  it('should return dry-run-completed without uploading', async () => {
+    const config = createMockConfig()
+    const result = await executor.executeTo(config, undefined, true)
+
+    expect(result.status).toBe('dry-run-completed')
+    expect(result.checksum).toBeDefined()
+    expect(mockStorageDriver.getUploadedKey()).toBeNull()
   })
 })
