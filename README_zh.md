@@ -1,5 +1,7 @@
 # @yinxulai/database-backup
 
+**[English](README.md)** · [![中文](https://img.shields.io/badge/中文-red)]()
+
 多模式数据库备份工具，采用 CI-first 架构。支持 PostgreSQL 数据库备份到 S3 兼容存储。
 
 ## 特性

@@ -1,5 +1,7 @@
 # @yinxulai/database-backup
 
+[![English](https://img.shields.io/badge-English-blue)]() · **[中文](README_zh.md)**
+
 A multi-mode database backup tool with CI-first architecture. Supports PostgreSQL databases with S3-compatible storage.
 
 ## Features
