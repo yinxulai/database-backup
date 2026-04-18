@@ -19,17 +19,17 @@
     {
       "id": "TASK-0002",
       "title": "Initialize code style document",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "unassigned",
       "summary": "Capture naming, structure, testing, and review conventions in designs/core/code-style.md.",
-      "updatedAt": "2026-04-18T01:49:30.971Z",
+      "updatedAt": "2026-04-18T01:50:05.871Z",
       "links": [
         "designs/core/code-style.md"
       ],
       "roadmapRefs": [
         "ROADMAP-0001"
       ],
-      "recordVersion": 2
+      "recordVersion": 3
     },
     {
       "id": "TASK-0003",
@@ -58,7 +58,7 @@
     }
   ],
   "meta": {
-    "tasks_version": 4,
+    "tasks_version": 5,
     "roadmaps_version": 1,
     "store_schema_version": 3
   },
@@ -66,9 +66,9 @@
     "tasks_markdown": {
       "name": "tasks_markdown",
       "dirty": false,
-      "lastSourceVersion": 4,
-      "lastBuiltAt": "2026-04-18T01:49:30.976Z",
-      "recordVersion": 12
+      "lastSourceVersion": 5,
+      "lastBuiltAt": "2026-04-18T01:50:05.875Z",
+      "recordVersion": 15
     },
     "roadmaps_markdown": {
       "name": "roadmaps_markdown",
