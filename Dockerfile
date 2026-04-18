@@ -44,4 +44,4 @@ COPY --from=builder /app/configs ./configs
 USER appuser
 
 # Run directly with tsx (no build step needed)
-CMD ["pnpm", "dev", "--", "--help"]
+CMD ["pnpm", "backup", "--", "--help"]

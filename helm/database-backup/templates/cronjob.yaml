@@ -75,7 +75,7 @@ spec:
               imagePullPolicy: {{ .Values.image.pullPolicy }}
               command:
                 - pnpm
-                - dev
+                - backup
                 - --
                 - run
                 - --config

@@ -13,6 +13,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "dev": "tsx source/cli/run.ts",
+    "backup": "tsx source/cli/run.ts",
     "build:sea": "node scripts/build-sea.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
