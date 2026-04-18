@@ -19,32 +19,32 @@
     {
       "id": "TASK-0002",
       "title": "Initialize code style document",
-      "status": "TODO",
+      "status": "IN_PROGRESS",
       "owner": "unassigned",
       "summary": "Capture naming, structure, testing, and review conventions in designs/core/code-style.md.",
-      "updatedAt": "2026-04-18T01:35:04.468Z",
+      "updatedAt": "2026-04-18T01:49:30.971Z",
       "links": [
         "designs/core/code-style.md"
       ],
       "roadmapRefs": [
         "ROADMAP-0001"
       ],
-      "recordVersion": 1
+      "recordVersion": 2
     },
     {
       "id": "TASK-0003",
       "title": "Initialize UI style document",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "unassigned",
       "summary": "Capture visual language, tokens, accessibility, and interaction rules in designs/core/ui-style.md.",
-      "updatedAt": "2026-04-18T01:48:51.655Z",
+      "updatedAt": "2026-04-18T01:49:21.398Z",
       "links": [
         "designs/core/ui-style.md"
       ],
       "roadmapRefs": [
         "ROADMAP-0001"
       ],
-      "recordVersion": 2
+      "recordVersion": 3
     }
   ],
   "roadmaps": [
@@ -58,7 +58,7 @@
     }
   ],
   "meta": {
-    "tasks_version": 2,
+    "tasks_version": 4,
     "roadmaps_version": 1,
     "store_schema_version": 3
   },
@@ -66,9 +66,9 @@
     "tasks_markdown": {
       "name": "tasks_markdown",
       "dirty": false,
-      "lastSourceVersion": 2,
-      "lastBuiltAt": "2026-04-18T01:48:51.662Z",
-      "recordVersion": 6
+      "lastSourceVersion": 4,
+      "lastBuiltAt": "2026-04-18T01:49:30.976Z",
+      "recordVersion": 12
     },
     "roadmaps_markdown": {
       "name": "roadmaps_markdown",
