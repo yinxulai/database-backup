@@ -45,6 +45,72 @@
         "ROADMAP-0001"
       ],
       "recordVersion": 3
+    },
+    {
+      "id": "TASK-0004",
+      "title": "实现结构化 JSON 日志",
+      "status": "TODO",
+      "owner": "",
+      "summary": "实现 JSON 结构化日志输出",
+      "updatedAt": "2026-04-18T04:35:06.147Z",
+      "links": [],
+      "roadmapRefs": [],
+      "recordVersion": 1
+    },
+    {
+      "id": "TASK-0005",
+      "title": "实现备份恢复功能",
+      "status": "TODO",
+      "owner": "",
+      "summary": "实现 pg_restore 备份恢复，支持指定时间点恢复",
+      "updatedAt": "2026-04-18T04:35:21.382Z",
+      "links": [],
+      "roadmapRefs": [],
+      "recordVersion": 1
+    },
+    {
+      "id": "TASK-0006",
+      "title": "实现 Prometheus Metrics 上报",
+      "status": "TODO",
+      "owner": "",
+      "summary": "实现 Prometheus 指标上报，支持备份成功/失败/耗时/大小等指标",
+      "updatedAt": "2026-04-18T04:35:30.316Z",
+      "links": [],
+      "roadmapRefs": [],
+      "recordVersion": 1
+    },
+    {
+      "id": "TASK-0007",
+      "title": "实现备份验证 Dry Run",
+      "status": "TODO",
+      "owner": "",
+      "summary": "实现备份上传前的 dry-run 验证，确保 dump 可读",
+      "updatedAt": "2026-04-18T04:35:34.230Z",
+      "links": [],
+      "roadmapRefs": [],
+      "recordVersion": 1
+    },
+    {
+      "id": "TASK-0008",
+      "title": "实现健康检查接口",
+      "status": "TODO",
+      "owner": "",
+      "summary": "实现 /health 端点，支持 liveness 和 readiness probe",
+      "updatedAt": "2026-04-18T04:35:38.509Z",
+      "links": [],
+      "roadmapRefs": [],
+      "recordVersion": 1
+    },
+    {
+      "id": "TASK-0009",
+      "title": "实现备份保留策略",
+      "status": "TODO",
+      "owner": "",
+      "summary": "实现基于时间和数量的备份保留策略，自动清理过期备份",
+      "updatedAt": "2026-04-18T04:35:42.432Z",
+      "links": [],
+      "roadmapRefs": [],
+      "recordVersion": 1
     }
   ],
   "roadmaps": [
@@ -58,7 +124,7 @@
     }
   ],
   "meta": {
-    "tasks_version": 7,
+    "tasks_version": 13,
     "roadmaps_version": 1,
     "store_schema_version": 3
   },
@@ -66,9 +132,9 @@
     "tasks_markdown": {
       "name": "tasks_markdown",
       "dirty": false,
-      "lastSourceVersion": 7,
-      "lastBuiltAt": "2026-04-18T02:25:02.750Z",
-      "recordVersion": 21
+      "lastSourceVersion": 13,
+      "lastBuiltAt": "2026-04-18T04:35:42.443Z",
+      "recordVersion": 39
     },
     "roadmaps_markdown": {
       "name": "roadmaps_markdown",
