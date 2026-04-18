@@ -4,8 +4,8 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { RetentionExecutor } from './executor.js'
-import type { StorageDriver } from '../core/interfaces.js'
-import type { ResolvedConfig } from '../core/types.js'
+import type { StorageDriver } from '@core/interfaces'
+import type { ResolvedConfig } from '@core/types'
 
 describe('RetentionExecutor', () => {
   let mockStorageDriver: StorageDriver

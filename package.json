@@ -3,27 +3,19 @@
   "version": "0.1.0",
   "description": "Multi-mode database backup tool with CI-first architecture",
   "type": "module",
-  "main": "./output/index.js",
   "bin": {
-    "backup": "./output/cli/run.js"
+    "backup": "./source/cli/run.ts"
   },
   "exports": {
-    ".": "./output/index.js",
-    "./cli": "./output/cli/index.js"
+    ".": "./source/index.ts",
+    "./cli": "./source/cli/run.ts"
   },
-  "files": [
-    "output/"
-  ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build:dev": "tsc -p tsconfig.json",
-    "build": "tsc -p tsconfig.json",
+    "dev": "tsx source/cli/run.ts",
     "build:sea": "node scripts/build-sea.mjs",
-    "prepack": "pnpm build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "vitest run tests/e2e",
-    "clean": "rm -rf output sea out",
     "lint": "eslint source --ext .ts"
   },
   "engines": {
@@ -31,11 +23,12 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
-    "yaml": "^2.0.0",
-    "cron-parser": "^4.0.0"
+    "cron-parser": "^4.0.0",
+    "yaml": "^2.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.0.0",
     "vitest": "^2.0.0"
   },

@@ -8,8 +8,8 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { Readable } from 'node:stream'
 import type { Readable as NodeReadable } from 'node:stream'
-import type { DumpOptions, ResolvedConnection } from '../../core/types.js'
-import type { DatabaseDriver } from '../../core/interfaces.js'
+import type { DumpOptions, ResolvedConnection } from '@core/types'
+import type { DatabaseDriver } from '@core/interfaces'
 
 const execFileAsync = promisify(execFile)
 

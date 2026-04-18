@@ -12,10 +12,10 @@ import {
   HeadObjectCommand,
   ListObjectsV2Command,
 } from '@aws-sdk/client-s3'
-import type { StorageObject } from '../../core/interfaces.js'
-import type { ResolvedS3Config, UploadResult } from '../../core/types.js'
-import type { StorageDriver } from '../../core/interfaces.js'
-import { createLogger, type Logger } from '../../core/logger.js'
+import type { StorageObject } from '@core/interfaces'
+import type { ResolvedS3Config, UploadResult } from '@core/types'
+import type { StorageDriver } from '@core/interfaces'
+import { createLogger, type Logger } from '@core/logger'
 
 /**
  * S3 storage driver implementation

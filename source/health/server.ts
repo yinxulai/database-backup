@@ -1,6 +1,6 @@
 
 import { createServer, type Server } from 'node:http'
-import type { DatabaseDriver } from '../core/interfaces.js'
+import type { DatabaseDriver } from '@core/interfaces'
 import type { HealthStatus } from './types.js'
 
 export interface HealthServerOptions {

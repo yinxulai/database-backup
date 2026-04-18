@@ -4,8 +4,8 @@
  * 从环境变量获取密钥值
  */
 
-import type { SecretRef } from '../../core/types.js'
-import type { SecretResolver } from '../../core/interfaces.js'
+import type { SecretRef } from '@core/types'
+import type { SecretResolver } from '@core/interfaces'
 
 /**
  * 环境变量密钥解析器

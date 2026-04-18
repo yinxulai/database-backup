@@ -2,14 +2,14 @@
 import { parseArgs } from 'node:util'
 import { resolve } from 'node:path'
 import { readFile } from 'node:fs/promises'
-import { createConfigScanner } from '../core/scanner.js'
-import { createEnvSecretResolver } from '../adapters/secret/env.js'
-import { createPostgreSQLDriver } from '../adapters/database/postgresql.js'
-import { createS3StorageDriver } from '../adapters/storage/s3.js'
-import { createBackupExecutor } from '../core/executor.js'
-import { createLogger } from '../core/logger.js'
-import type { SecretResolver, DatabaseDriver, StorageDriver } from '../core/interfaces.js'
-import type { ResolvedConfig, BackupGroup } from '../core/types.js'
+import { createConfigScanner } from '@core/scanner'
+import { createEnvSecretResolver } from '@adapters/secret/env'
+import { createPostgreSQLDriver } from '@adapters/database/postgresql'
+import { createS3StorageDriver } from '@adapters/storage/s3'
+import { createBackupExecutor } from '@core/executor'
+import { createLogger } from '@core/logger'
+import type { SecretResolver, DatabaseDriver, StorageDriver } from '@core/interfaces'
+import type { ResolvedConfig, BackupGroup } from '@core/types'
 
 const logger = createLogger()
 

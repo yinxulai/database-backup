@@ -1,7 +1,7 @@
 
-import type { StorageDriver } from '../core/interfaces.js'
-import type { ResolvedConfig } from '../core/types.js'
-import { createLogger, type Logger } from '../core/logger.js'
+import type { StorageDriver } from '@core/interfaces'
+import type { ResolvedConfig } from '@core/types'
+import { createLogger, type Logger } from '@core/logger'
 
 export interface RetentionResult {
   taskName: string

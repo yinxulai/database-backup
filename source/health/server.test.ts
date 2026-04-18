@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createServer } from 'node:http'
 import { createHealthServer } from './server.js'
-import type { DatabaseDriver } from '../core/interfaces.js'
+import type { DatabaseDriver } from '@core/interfaces'
 
 describe('createHealthServer', () => {
   let mockDriver: DatabaseDriver

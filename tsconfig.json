@@ -1,8 +1,17 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowJs": true,
+    "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "paths": {
+      "@core/*": ["source/core/*"],
+      "@adapters/*": ["source/adapters/*"],
+      "@health/*": ["source/health/*"],
+      "@retention/*": ["source/retention/*"]
+    },
     "outDir": "./output",
     "rootDir": "./source",
     "declaration": true,
@@ -14,7 +23,6 @@
     "forceConsistentCasingInFileNames": true,
     "noUncheckedIndexedAccess": false,
     "exactOptionalPropertyTypes": false,
-    "verbatimModuleSyntax": true,
     "isolatedModules": true
   },
   "include": ["source/**/*"],
