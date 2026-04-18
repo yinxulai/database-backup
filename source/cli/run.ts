@@ -299,7 +299,7 @@ async function resolveConfig(
       port: source.connection.port,
       username: source.connection.username,
       password,
-      database: source.connection.database,
+      database: source.connection.database ?? source.database,
       ssl: source.connection.ssl ?? false,
     },
     s3: resolvedS3Config,

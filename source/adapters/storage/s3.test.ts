@@ -5,10 +5,12 @@
  * 由于 S3 操作需要真实的 S3 服务，我们使用一个简单的 mock 实现。
  */
 
-import { describe, it, expect } from 'vitest'
-import type { ResolvedS3Config } from '@core/types'
-import type { StorageDriver, StorageObject } from '@core/interfaces'
+import { describe, it, expect, vi } from 'vitest'
 import { Readable } from 'node:stream'
+
+import type { ResolvedS3Config } from '../../core/types.js'
+import type { StorageDriver, StorageObject } from '../../core/interfaces.js'
+import { S3StorageDriver } from './s3.js'
 
 // 创建一个 Mock S3StorageDriver 来测试接口契约
 class MockS3StorageDriver implements StorageDriver {
@@ -117,6 +119,31 @@ describe('S3StorageDriver', () => {
       expect(result).toHaveProperty('size')
       expect(result).toHaveProperty('duration')
       expect(typeof result.duration).toBe('number')
+    })
+
+    it('should not duplicate pathPrefix when key already contains the prefix', async () => {
+      const driver = new S3StorageDriver({
+        ...mockConfig,
+        pathPrefix: 'copilot-tests/2026-04-18',
+      })
+
+      const send = vi.fn().mockResolvedValue({})
+      const internalDriver = driver as unknown as { client: { send: typeof send } }
+      internalDriver.client = { send }
+
+      const result = await driver.upload(
+        Readable.from(['test data']),
+        'copilot-tests/2026-04-18/file.sql.gz'
+      )
+
+      expect(send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input: expect.objectContaining({
+            Key: 'copilot-tests/2026-04-18/file.sql.gz',
+          }),
+        })
+      )
+      expect(result.key).toBe('copilot-tests/2026-04-18/file.sql.gz')
     })
   })
 

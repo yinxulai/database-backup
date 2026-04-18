@@ -6,17 +6,12 @@
   "bin": {
     "backup": "./source/cli/run.ts"
   },
-  "exports": {
-    ".": "./source/index.ts",
-    "./cli": "./source/cli/run.ts"
-  },
   "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "dev": "tsx source/cli/run.ts",
     "backup": "tsx source/cli/run.ts",
-    "build:sea": "node scripts/build-sea.mjs",
-    "test": "vitest run",
-    "test:watch": "vitest",
     "lint": "eslint source --ext .ts"
   },
   "engines": {

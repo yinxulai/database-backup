@@ -27,7 +27,7 @@ docker run --rm \
   -e AWS_SECRET_ACCESS_KEY=your-secret \
   -v /path/to/backup.yaml:/config/backup.yaml \
   ghcr.io/yinxulai/database-backup:latest \
-  backup run --config /config/backup.yaml
+  run --config /config/backup.yaml
 ```
 
 ### Kubernetes (Helm)
@@ -203,7 +203,7 @@ docker run --rm \
   -e AWS_SECRET_ACCESS_KEY=your-secret \
   -v /path/to/backup.yaml:/config/backup.yaml \
   ghcr.io/yinxulai/database-backup:latest \
-  backup run --config /config/backup.yaml
+  run --config /config/backup.yaml
 ```
 
 ### Kubernetes (Helm) - Complete Example

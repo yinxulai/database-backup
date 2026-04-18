@@ -6,7 +6,7 @@
 
 import { promisify } from 'node:util'
 import { execFile } from 'node:child_process'
-import type { Readable, Writable } from 'node:stream'
+import { PassThrough, type Readable, type Writable } from 'node:stream'
 import type { DatabaseDriver } from '@core/interfaces'
 import type { DumpOptions, RestoreOptions, ResolvedConnection } from '@core/types'
 
@@ -17,11 +17,14 @@ const execFileAsync = promisify(execFile)
  */
 export class PostgreSQLDriver implements DatabaseDriver {
   readonly type = 'postgresql'
+  private password?: string
 
   constructor(
     private connection: ResolvedConnection,
-    private password?: string
-  ) {}
+    password?: string
+  ) {
+    this.password = password ?? connection.password
+  }
 
   /**
    * 测试数据库连接
@@ -49,39 +52,46 @@ export class PostgreSQLDriver implements DatabaseDriver {
     const args = this.buildPgDumpArgs(options)
     const env = this.createEnv()
 
-    // 使用 spawn 创建一个可读的流
     const { spawn } = await import('node:child_process')
-    
     const pgDump = spawn('pg_dump', args, { env, stdio: ['ignore', 'pipe', 'pipe'] })
-
-    // 如果需要 gzip
-    if (options.compression === 'gzip') {
-      const { spawn: spawnGzip } = await import('node:child_process')
-      const gzip = spawnGzip('gzip', ['-c'], { stdio: ['pipe', 'pipe', 'pipe'] })
-      
-      pgDump.stdout.pipe(gzip.stdin)
-      pgDump.stderr.on('data', (data: Buffer | string) => {
-        console.error(`[pg_dump] ${data.toString().trim()}`)
-      })
-      gzip.stderr.on('data', (data: Buffer | string) => {
-        console.error(`[gzip] ${data.toString().trim()}`)
-      })
-      
-      // 当 gzip 退出时，确保 pg_dump 也被终止
-      gzip.on('close', (code) => {
-        if (code !== 0) {
-          pgDump.kill()
-        }
-      })
-      
-      return gzip.stdout
-    }
+    const output = new PassThrough()
 
     pgDump.stderr.on('data', (data: Buffer | string) => {
       console.error(`[pg_dump] ${data.toString().trim()}`)
     })
+    pgDump.on('error', (err) => output.destroy(err))
+    pgDump.on('close', (code) => {
+      if (code !== 0) {
+        output.destroy(new Error(`pg_dump exited with code ${code}`))
+      } else if (!output.destroyed) {
+        output.end()
+      }
+    })
 
-    return pgDump.stdout
+    if (options.compression === 'gzip') {
+      const { spawn: spawnGzip } = await import('node:child_process')
+      const gzip = spawnGzip('gzip', ['-c'], { stdio: ['pipe', 'pipe', 'pipe'] })
+
+      pgDump.stdout.pipe(gzip.stdin)
+      gzip.stdout.pipe(output, { end: false })
+      gzip.stderr.on('data', (data: Buffer | string) => {
+        console.error(`[gzip] ${data.toString().trim()}`)
+      })
+      gzip.on('error', (err) => output.destroy(err))
+      gzip.on('close', (code) => {
+        if (code !== 0) {
+          pgDump.kill()
+          output.destroy(new Error(`gzip exited with code ${code}`))
+        } else if (!output.destroyed) {
+          output.end()
+        }
+      })
+
+      return output
+    }
+
+    pgDump.stdout.pipe(output, { end: false })
+    return output
   }
 
   /**
@@ -273,9 +283,7 @@ export class PostgreSQLDriver implements DatabaseDriver {
       }
     }
 
-    // 输出格式
-    args.push('-f', '/dev/null') // 我们用 stdout
-    args.push('--stdout')
+    // 默认输出到 stdout，由调用方读取流
 
     // 自定义格式（兼容性好）
     // args.push('-Fc')

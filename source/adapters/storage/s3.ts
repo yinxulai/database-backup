@@ -46,9 +46,7 @@ export class S3StorageDriver implements StorageDriver {
    * Download data from S3
    */
   async download(key: string): Promise<Readable> {
-    const fullKey = this.config.pathPrefix
-      ? `${this.config.pathPrefix}/${key}`
-      : key
+    const fullKey = this.resolveKey(key)
 
     this.logger.debug('S3 download started', { key: fullKey, bucket: this.config.bucket })
 
@@ -71,9 +69,7 @@ export class S3StorageDriver implements StorageDriver {
    * Upload data to S3
    */
   async upload(data: NodeReadable, key: string): Promise<UploadResult> {
-    const fullKey = this.config.pathPrefix
-      ? `${this.config.pathPrefix}/${key}`
-      : key
+    const fullKey = this.resolveKey(key)
 
     this.logger.debug('S3 upload started', { key: fullKey, bucket: this.config.bucket })
 
@@ -116,9 +112,7 @@ export class S3StorageDriver implements StorageDriver {
    * Delete S3 object
    */
   async delete(key: string): Promise<void> {
-    const fullKey = this.config.pathPrefix
-      ? `${this.config.pathPrefix}/${key}`
-      : key
+    const fullKey = this.resolveKey(key)
 
     this.logger.debug('S3 delete started', { key: fullKey, bucket: this.config.bucket })
 
@@ -137,9 +131,7 @@ export class S3StorageDriver implements StorageDriver {
    */
   async list(prefix?: string): Promise<StorageObject[]> {
     const fullPrefix = prefix
-      ? this.config.pathPrefix
-        ? `${this.config.pathPrefix}/${prefix}`
-        : prefix
+      ? this.resolveKey(prefix)
       : this.config.pathPrefix ?? ''
 
     this.logger.debug('S3 list started', { prefix: fullPrefix, bucket: this.config.bucket })
@@ -184,9 +176,7 @@ export class S3StorageDriver implements StorageDriver {
    * Get S3 object metadata
    */
   async head(key: string): Promise<{ size: number; lastModified: Date } | null> {
-    const fullKey = this.config.pathPrefix
-      ? `${this.config.pathPrefix}/${key}`
-      : key
+    const fullKey = this.resolveKey(key)
 
     this.logger.debug('S3 head started', { key: fullKey, bucket: this.config.bucket })
 
@@ -208,6 +198,21 @@ export class S3StorageDriver implements StorageDriver {
       this.logger.debug('S3 head failed', { key: fullKey })
       return null
     }
+  }
+
+  private resolveKey(key: string): string {
+    const prefix = this.config.pathPrefix?.replace(/^\/+|\/+$/g, '')
+    const normalizedKey = key.replace(/^\/+/, '')
+
+    if (!prefix) {
+      return normalizedKey
+    }
+
+    if (!normalizedKey || normalizedKey === prefix || normalizedKey.startsWith(`${prefix}/`)) {
+      return normalizedKey || prefix
+    }
+
+    return `${prefix}/${normalizedKey}`
   }
 }
 
