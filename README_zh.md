@@ -42,6 +42,7 @@ spec:
       username: postgres
       password: ${DB_PASSWORD}  # 环境变量引用
     database: myapp
+    tables: ["*"]  # 空或省略 = 所有表
   destination:
     type: s3
     s3:
@@ -50,9 +51,6 @@ spec:
       bucket: my-backups
       accessKeyId: ${AWS_ACCESS_KEY_ID}
       secretAccessKey: ${AWS_SECRET_ACCESS_KEY}
-  tasks:
-    - name: full-backup
-      tables: ["*"]  # 所有表
 ```
 
 ### 2. 执行备份
@@ -100,9 +98,6 @@ spec:
       pathPrefix?: string      # 可选路径前缀
 
   # 备份任务列表
-  tasks:
-    - name: 任务名称
-      tables: ["table1", "table2"]  # 要备份的表
       destination:             # 可选：覆盖默认目标
         type: s3
         s3:
@@ -204,6 +199,7 @@ config:
             secretName: postgres-secret
             secretKey: password
         database: myapp
+    tables: ["*"]  # 空或省略 = 所有表
       destination:
         type: s3
         s3:
@@ -218,9 +214,6 @@ config:
             type: k8s
             secretName: aws-secret
             secretKey: secret-access-key
-      tasks:
-        - name: full-backup
-          tables: ["*"]
 
 env:
   - name: AWS_ACCESS_KEY_ID

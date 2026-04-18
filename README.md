@@ -4,7 +4,7 @@ A multi-mode database backup tool with CI-first architecture. Supports PostgreSQ
 
 ## Features
 
-- **Multi-task backup**: Define multiple backup tasks in a single YAML configuration
+- **Multiple backup groups**: Define multiple backup groups in a single YAML configuration
 - **PostgreSQL support**: Uses `pg_dump` for reliable database dumps
 - **S3-compatible storage**: Upload backups to any S3-compatible storage (AWS S3, MinIO, etc.)
 - **Multiple deployment options**: Docker, Kubernetes (Helm), or direct binary
@@ -40,8 +40,9 @@ spec:
       host: localhost
       port: 5432
       username: postgres
-      password: ${DB_PASSWORD}  # Environment variable reference
+      password: ${DB_PASSWORD}
     database: myapp
+    tables: ["*"]  # Empty or omitted = all tables
   destination:
     type: s3
     s3:
@@ -50,9 +51,6 @@ spec:
       bucket: my-backups
       accessKeyId: ${AWS_ACCESS_KEY_ID}
       secretAccessKey: ${AWS_SECRET_ACCESS_KEY}
-  tasks:
-    - name: full-backup
-      tables: ["*"]  # All tables
 ```
 
 ### 2. Run backup
@@ -87,8 +85,9 @@ spec:
       username: string
       password: string | ${ENV_VAR}
     database: string
+    tables: ["*"]              # Empty = all tables
 
-  # Default destination (can be overridden per task)
+  # Destination configuration
   destination:
     type: s3
     s3:
@@ -97,16 +96,16 @@ spec:
       bucket: string
       accessKeyId: string | ${ENV_VAR}
       secretAccessKey: string | ${ENV_VAR}
-      pathPrefix?: string      # Optional path prefix
+      pathPrefix?: string      # Optional: "{{.Database}}/{{.Date}}"
 
-  # Backup tasks
-  tasks:
-    - name: task-name
-      tables: ["table1", "table2"]  # Tables to backup
-      destination:             # Optional: override default destination
-        type: s3
-        s3:
-          # ... destination config
+  # Schedule (optional, omit for manual execution)
+  schedule:
+    cron: "0 2 * * *"         # Cron expression
+    timezone: "Asia/Shanghai"  # Optional timezone
+
+  # Retention policy (optional)
+  retention:
+    retentionDays: 7           # Keep backups for N days
 ```
 
 ### Environment Variable Reference
@@ -123,6 +122,9 @@ accessKeyId: ${AWS_ACCESS_KEY_ID}
 ```bash
 # Run backup
 backup run --config <path-to-config>
+
+# Validate config
+backup validate --config <path-to-config>
 
 # Show help
 backup --help
@@ -166,15 +168,12 @@ docker run --rm \
 ### Kubernetes (Helm)
 
 ```bash
-# Add Helm repo
-helm repo add database-backup https://yinxulai.github.io/database-backup
-
-# Install
-helm install database-backup database-backup/database-backup \
+# Install with Helm
+helm install database-backup oci://ghcr.io/yinxulai/helm/database-backup \
   --set config.content="$(cat backup.yaml)"
 
 # Or use values file
-helm install database-backup database-backup/database-backup -f values.yaml
+helm install database-backup oci://ghcr.io/yinxulai/helm/database-backup -f values.yaml
 ```
 
 Example `values.yaml`:
@@ -204,6 +203,7 @@ config:
             secretName: postgres-secret
             secretKey: password
         database: myapp
+        tables: ["*"]
       destination:
         type: s3
         s3:
@@ -218,9 +218,6 @@ config:
             type: k8s
             secretName: aws-secret
             secretKey: secret-access-key
-      tasks:
-        - name: full-backup
-          tables: ["*"]
 
 env:
   - name: AWS_ACCESS_KEY_ID
@@ -258,8 +255,8 @@ pnpm typecheck
 # Run tests
 pnpm test
 
-# Build
-pnpm build
+# Run CLI
+pnpm dev
 ```
 
 ## License
