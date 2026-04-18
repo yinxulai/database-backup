@@ -13,55 +13,44 @@
 #   accessKeyId: your-key
 #   secretAccessKey: your-secret
 
-apiVersion: database-backup.yinxulai/v1
-kind: BackupGroup
-metadata:
-  name: example-postgres-backup
-  labels:
-    app: example
-spec:
-  # 来源配置
-  source:
-    type: postgresql
-    connection:
-      host: localhost
-      port: 5432
-      username: postgres
-      # 方式一：直接写明文（适合本地测试）
-      # password: your-password
+name: example-postgres-backup
 
-      # 方式二：使用环境变量（推荐生产环境）
-      passwordSecretRef:
-        type: env
-        envVar: DB_PASSWORD
-      ssl: false
-    database: myapp
-    schema: public
-    # 要备份的表（空数组或省略 = 全库）
-    tables: []
+# 来源配置
+source:
+  type: postgresql
+  connection:
+    host: localhost
+    port: 5432
+    username: postgres
+    # 方式一：直接写明文（适合本地测试）
+    # password: your-password
 
-  # 目标配置
-  destination:
-    type: s3
-    s3:
-      endpoint: https://s3.amazonaws.com
-      region: us-east-1
-      bucket: my-backups
-      accessKeySecretRef:
-        type: env
-        envVar: AWS_ACCESS_KEY_ID
-      secretKeySecretRef:
-        type: env
-        envVar: AWS_SECRET_ACCESS_KEY
-      # 路径模板
-      pathPrefix: "{{.Database}}/{{.Date}}"
+    # 方式二：使用环境变量（推荐生产环境）
+    password: ${DB_PASSWORD}
+    ssl: false
+  database: myapp
+  schema: public
+  # 要备份的表（空数组或省略 = 全库）
+  tables: []
 
-  # 调度配置（可选，不填 = 手动执行）
-  # schedule:
-  #   enabled: true
-  #   cron: "0 2 * * *"
-  #   timezone: "Asia/Shanghai"
+# 目标配置
+destination:
+  type: s3
+  s3:
+    endpoint: https://s3.amazonaws.com
+    region: us-east-1
+    bucket: my-backups
+    accessKeyId: ${AWS_ACCESS_KEY_ID}
+    secretAccessKey: ${AWS_SECRET_ACCESS_KEY}
+    # 路径模板
+    pathPrefix: "{{.Database}}/{{.Date}}"
 
-  # 保留策略（可选）
-  # retention:
-  #   retentionDays: 7
+# 调度配置（可选，不填 = 手动执行）
+# schedule:
+#   enabled: true
+#   cron: "0 2 * * *"
+#   timezone: "Asia/Shanghai"
+
+# 保留策略（可选）
+# retention:
+#   retentionDays: 7

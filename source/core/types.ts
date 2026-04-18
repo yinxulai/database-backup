@@ -40,10 +40,8 @@ export interface ConnectionConfig {
   port: number
   /** 用户名 */
   username: string
-  /** 明文密码（适合本地测试）*/
-  password?: string
-  /** 密码（通过 SecretRef 引用）*/
-  passwordSecretRef?: SecretRef
+  /** 密码（明文或 ${ENV_VAR}）*/
+  password: string
   /** 数据库名称 */
   database: string
   /** 是否使用 SSL */
@@ -72,14 +70,10 @@ export interface S3Config {
   region: string
   /** Bucket 名称 */
   bucket: string
-  /** 明文访问密钥（适合本地测试）*/
-  accessKeyId?: string
-  /** 明文私有密钥（适合本地测试）*/
-  secretAccessKey?: string
-  /** 访问密钥（通过 SecretRef 引用）*/
-  accessKeySecretRef?: SecretRef
-  /** 私有密钥（通过 SecretRef 引用）*/
-  secretKeySecretRef?: SecretRef
+  /** 访问密钥（明文或 ${ENV_VAR}）*/
+  accessKeyId: string
+  /** 私有密钥（明文或 ${ENV_VAR}）*/
+  secretAccessKey: string
   /** 路径前缀模板 */
   pathPrefix?: string
   /** 是否使用 Path Style（MinIO 需要）*/
@@ -98,14 +92,10 @@ export interface LocalConfig {
  * 密钥引用
  */
 export interface SecretRef {
-  /** 类型: env (环境变量) / k8s (K8s Secret) */
-  type: 'env' | 'k8s'
-  /** 环境变量名（type=env 时使用）*/
+  /** 可选类型标记，仅保留 env */
+  type?: 'env'
+  /** 环境变量名 */
   envVar?: string
-  /** K8s Secret 名称（type=k8s 时使用）*/
-  secretName?: string
-  /** K8s Secret key（type=k8s 时使用）*/
-  secretKey?: string
 }
 
 /**
@@ -131,31 +121,9 @@ export interface RetentionConfig {
 /**
  * 备份任务配置
  */
-export interface BackupGroup {
-  /** API 版本 */
-  apiVersion: string
-  /** 资源类型 */
-  kind: 'BackupGroup'
-  /** 元数据 */
-  metadata: BackupGroupMetadata
-  /** 规格配置 */
-  spec: BackupGroupSpec
-}
-
-/**
- * 备份组元数据
- */
-export interface BackupGroupMetadata {
+export interface BackupConfig {
   /** 名称 */
   name: string
-  /** 标签 */
-  labels?: Record<string, string>
-}
-
-/**
- * 备份组规格配置
- */
-export interface BackupGroupSpec {
   /** 来源配置 */
   source: BackupSource
   /** 目标配置 */
@@ -228,11 +196,11 @@ export interface UploadResult {
 }
 
 /**
- * 解析后的配置（SecretRef 已解析）
+ * 解析后的配置
  */
 export interface ResolvedConfig {
-  /** 备份组配置 */
-  group: BackupGroup
+  /** 备份配置 */
+  config: BackupConfig
   /** 解析后的连接配置 */
   connection: ResolvedConnection
   /** 解析后的 S3 配置 */

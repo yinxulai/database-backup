@@ -12,36 +12,32 @@ describe('RetentionExecutor', () => {
   let executor: RetentionExecutor
 
   const mockConfig: ResolvedConfig = {
-    group: {
-      apiVersion: 'database-backup.yinxulai/v1',
-      kind: 'BackupGroup',
-      metadata: { name: 'test-backup' },
-      spec: {
-        source: {
-          type: 'postgresql',
-          connection: {
-            host: 'localhost',
-            port: 5432,
-            username: 'postgres',
-            passwordSecretRef: { type: 'env', envVar: 'DB_PASSWORD' },
-            database: 'testdb',
-          },
+    config: {
+      name: 'test-backup',
+      source: {
+        type: 'postgresql',
+        connection: {
+          host: 'localhost',
+          port: 5432,
+          username: 'postgres',
+          password: 'password',
           database: 'testdb',
         },
-        destination: {
-          type: 's3',
-          s3: {
-            endpoint: 'https://s3.amazonaws.com',
-            region: 'us-east-1',
-            bucket: 'test-bucket',
-            accessKeySecretRef: { type: 'env', envVar: 'AWS_ACCESS_KEY_ID' },
-            secretKeySecretRef: { type: 'env', envVar: 'AWS_SECRET_ACCESS_KEY' },
-            pathPrefix: 'backups',
-          },
+        database: 'testdb',
+      },
+      destination: {
+        type: 's3',
+        s3: {
+          endpoint: 'https://s3.amazonaws.com',
+          region: 'us-east-1',
+          bucket: 'test-bucket',
+          accessKeyId: 'key',
+          secretAccessKey: 'secret',
+          pathPrefix: 'backups',
         },
-        retention: {
-          retentionDays: 7,
-        },
+      },
+      retention: {
+        retentionDays: 7,
       },
     },
     connection: {
@@ -76,12 +72,9 @@ describe('RetentionExecutor', () => {
   it('should skip when no retention policy is configured', async () => {
     const configWithoutRetention = {
       ...mockConfig,
-      group: {
-        ...mockConfig.group,
-        spec: {
-          ...mockConfig.group.spec,
-          retention: undefined,
-        },
+      config: {
+        ...mockConfig.config,
+        retention: undefined,
       },
     }
 
@@ -96,12 +89,9 @@ describe('RetentionExecutor', () => {
   it('should skip when retentionDays is 0', async () => {
     const configZeroRetention = {
       ...mockConfig,
-      group: {
-        ...mockConfig.group,
-        spec: {
-          ...mockConfig.group.spec,
-          retention: { retentionDays: 0 },
-        },
+      config: {
+        ...mockConfig.config,
+        retention: { retentionDays: 0 },
       },
     }
 

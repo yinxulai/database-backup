@@ -13,7 +13,7 @@ describe('Core Types', () => {
           host: 'localhost',
           port: 5432,
           username: 'postgres',
-          passwordSecretRef: { type: 'env' as const, envVar: 'DB_PASSWORD' },
+          password: '${DB_PASSWORD}',
           database: 'testdb',
         },
         database: 'testdb',
@@ -32,7 +32,7 @@ describe('Core Types', () => {
           host: 'localhost',
           port: 5432,
           username: 'postgres',
-          passwordSecretRef: { type: 'env' as const, envVar: 'DB_PASSWORD' },
+          password: '${DB_PASSWORD}',
           database: 'testdb',
         },
         database: 'testdb',
@@ -48,7 +48,7 @@ describe('Core Types', () => {
           host: 'localhost',
           port: 5432,
           username: 'postgres',
-          passwordSecretRef: { type: 'env' as const, envVar: 'DB_PASSWORD' },
+          password: '${DB_PASSWORD}',
           database: 'testdb',
         },
         database: 'testdb',
@@ -67,8 +67,8 @@ describe('Core Types', () => {
           endpoint: 'https://s3.amazonaws.com',
           region: 'us-east-1',
           bucket: 'my-backups',
-          accessKeySecretRef: { type: 'env' as const, envVar: 'AWS_ACCESS_KEY_ID' },
-          secretKeySecretRef: { type: 'env' as const, envVar: 'AWS_SECRET_ACCESS_KEY' },
+          accessKeyId: '${AWS_ACCESS_KEY_ID}',
+          secretAccessKey: '${AWS_SECRET_ACCESS_KEY}',
           pathPrefix: '{{.Database}}/{{.Date}}',
         },
       }
@@ -78,18 +78,10 @@ describe('Core Types', () => {
     })
   })
 
-  describe('SecretRef', () => {
-    it('should support env type', () => {
-      const ref = { type: 'env' as const, envVar: 'DB_PASSWORD' }
-      expect(ref.type).toBe('env')
-      expect(ref.envVar).toBe('DB_PASSWORD')
-    })
-
-    it('should support k8s type', () => {
-      const ref = { type: 'k8s' as const, secretName: 'my-secret', secretKey: 'password' }
-      expect(ref.type).toBe('k8s')
-      expect(ref.secretName).toBe('my-secret')
-      expect(ref.secretKey).toBe('password')
+  describe('Environment placeholders', () => {
+    it('should allow env placeholder strings', () => {
+      const password = '${DB_PASSWORD}'
+      expect(password).toContain('DB_PASSWORD')
     })
   })
 

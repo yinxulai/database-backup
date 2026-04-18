@@ -8,8 +8,8 @@ All notable changes to this project will be documented in this file.
 - Initial release
 - PostgreSQL database backup support using `pg_dump`
 - S3-compatible storage destination
-- YAML configuration with BackupGroup structure
-- Multiple backup groups support
+- Plain YAML configuration loaded from a directory
+- Multiple backup config files support
 - Kubernetes (Helm) deployment support
 - Docker image deployment support
 - CLI with `run`, `validate`, `restore` commands
@@ -18,8 +18,7 @@ All notable changes to this project will be documented in this file.
 - Unit tests with vitest
 
 ### Features
-- Support for `passwordSecretRef` for credentials (env/k8s secret types)
-- Support for `accessKeySecretRef` and `secretKeySecretRef` for S3 credentials
+- Support for plain credentials and `${ENV_VAR}` placeholders
 - Configurable backup schedule via Helm values
 - Dry-run mode for validation
 

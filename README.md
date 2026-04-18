@@ -77,38 +77,28 @@ helm install database-backup oci://your-registry/database-backup -f values.yaml
 
 ### 1. Create a configuration file
 
+> Use a plain top-level YAML structure. The old Kubernetes-style wrapper is no longer supported.
+
 ```yaml
 # backup.yaml
-apiVersion: database-backup.yinxulai/v1
-kind: BackupGroup
-metadata:
-  name: my-database-backup
-spec:
-  source:
-    type: postgresql
-    connection:
-      host: localhost
-      port: 5432
-      username: postgres
-      password: your-password  # simple local usage
-      # or use SecretRef in production:
-      # passwordSecretRef:
-      #   type: env
-      #   envVar: DB_PASSWORD
-    database: myapp
-    tables: ["*"]  # Empty or omitted = all tables
-  destination:
-    type: s3
-    s3:
-      endpoint: https://s3.amazonaws.com
-      region: us-east-1
-      bucket: my-backups
-      accessKeySecretRef:
-        type: env
-        envVar: AWS_ACCESS_KEY_ID
-      secretKeySecretRef:
-        type: env
-        envVar: AWS_SECRET_ACCESS_KEY
+name: my-database-backup
+source:
+  type: postgresql
+  connection:
+    host: localhost
+    port: 5432
+    username: postgres
+    password: ${DB_PASSWORD}  # or write the plain password directly
+  database: myapp
+  tables: ["*"]  # Empty or omitted = all tables
+destination:
+  type: s3
+  s3:
+    endpoint: https://s3.amazonaws.com
+    region: us-east-1
+    bucket: my-backups
+    accessKeyId: ${AWS_ACCESS_KEY_ID}
+    secretAccessKey: ${AWS_SECRET_ACCESS_KEY}
 ```
 
 ### 2. Run backup
@@ -126,68 +116,44 @@ backup run --config backup.yaml
 
 ## Configuration
 
-### BackupGroup Structure
+### Configuration Structure
 
 ```yaml
-apiVersion: database-backup.yinxulai/v1
-kind: BackupGroup
-metadata:
-  name: backup-group-name
-spec:
-  # Source database configuration
-  source:
-    type: postgresql           # Only postgresql supported now
-    connection:
-      host: string
-      port: number             # Default: 5432
-      username: string
-      password?: string        # plain text, suitable for local testing
-      passwordSecretRef?:
-        type: env              # env | k8s
-        envVar: string         # for type=env
-        # secretName: string   # for type=k8s
-        # secretKey: string    # for type=k8s
-    database: string
-    tables: ["*"]              # Empty = all tables
+name: backup-job-name
 
-  # Destination configuration
-  destination:
-    type: s3
-    s3:
-      endpoint: string
-      region: string
-      bucket: string
-      accessKeyId?: string     # plain text, suitable for local testing
-      secretAccessKey?: string # plain text, suitable for local testing
-      accessKeySecretRef?:
-        type: env | k8s
-        envVar?: string
-        secretName?: string
-        secretKey?: string
-      secretKeySecretRef?:
-        type: env | k8s
-        envVar?: string
-        secretName?: string
-        secretKey?: string
-      pathPrefix?: string      # Optional: "{{.Database}}/{{.Date}}"
+# Source database configuration
+source:
+  type: postgresql             # Only postgresql supported now
+  connection:
+    host: string
+    port: number               # Default: 5432
+    username: string
+    password: string           # plain text or ${DB_PASSWORD}
+  database: string
+  schema?: string
+  tables: ["*"]                # Empty = all tables
 
-  # Retention policy (optional)
-  retention:
-    retentionDays: 7           # Keep backups for N days
+# Destination configuration
+destination:
+  type: s3
+  s3:
+    endpoint: string
+    region: string
+    bucket: string
+    accessKeyId: string        # plain text or ${AWS_ACCESS_KEY_ID}
+    secretAccessKey: string    # plain text or ${AWS_SECRET_ACCESS_KEY}
+    pathPrefix?: string        # Optional: "{{.Database}}/{{.Date}}"
+
+# Retention policy (optional)
+retention:
+  retentionDays: 7
 ```
 
-### Secret Reference Types
+The plain top-level YAML structure is the only supported config format.
 
-For sensitive credentials, use `SecretRef`:
+### Environment Variable Reference
 
-| Type | Usage | Example |
-|------|-------|---------|
-| `env` | Environment variable | `envVar: "DB_PASSWORD"` |
-| `k8s` | Kubernetes Secret | `secretName: "my-secret", secretKey: "password"` |
-
-### Environment Variable Reference (for local development)
-
-Use `${ENV_VAR_NAME}` syntax in backup.yaml for local runs.
+Use ${ENV_VAR_NAME} syntax directly in the YAML values when needed.
 
 ## CLI Usage
 
@@ -248,37 +214,24 @@ schedule: "0 2 * * *"  # Daily at 2 AM UTC
 
 config:
   content: |
-    apiVersion: database-backup.yinxulai/v1
-    kind: BackupGroup
-    metadata:
-      name: my-backup
-    spec:
-      source:
-        type: postgresql
-        connection:
-          host: postgres.database.svc.cluster.local
-          port: 5432
-          username: postgres
-          passwordSecretRef:
-            type: k8s
-            secretName: postgres-secret
-            secretKey: password
-        database: myapp
-        tables: ["*"]
-      destination:
-        type: s3
-        s3:
-          endpoint: https://s3.amazonaws.com
-          region: us-east-1
-          bucket: my-backups
-          accessKeySecretRef:
-            type: k8s
-            secretName: aws-secret
-            secretKey: access-key-id
-          secretKeySecretRef:
-            type: k8s
-            secretName: aws-secret
-            secretKey: secret-access-key
+    name: my-backup
+    source:
+      type: postgresql
+      connection:
+        host: postgres.database.svc.cluster.local
+        port: 5432
+        username: postgres
+        password: ${DB_PASSWORD}
+      database: myapp
+      tables: ["*"]
+    destination:
+      type: s3
+      s3:
+        endpoint: https://s3.amazonaws.com
+        region: us-east-1
+        bucket: my-backups
+        accessKeyId: ${AWS_ACCESS_KEY_ID}
+        secretAccessKey: ${AWS_SECRET_ACCESS_KEY}
       retention:
         retentionDays: 7
 ```

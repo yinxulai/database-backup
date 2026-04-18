@@ -2,7 +2,7 @@
 import type { Readable, Writable } from 'node:stream'
 import type {
   SecretRef,
-  BackupGroup,
+  BackupConfig,
   BackupResult,
   DumpOptions,
   UploadResult,
@@ -93,14 +93,14 @@ export interface ConfigScanner {
    * @param path 配置文件路径
    * @returns 解析后的备份组配置
    */
-  scan(path: string): Promise<BackupGroup[]>
+  scan(path: string): Promise<BackupConfig[]>
 
   /**
    * 扫描多个配置文件
    * @param paths 配置文件路径列表
    * @returns 解析后的备份组配置列表
    */
-  scanMultiple(paths: string[]): Promise<BackupGroup[]>
+  scanMultiple(paths: string[]): Promise<BackupConfig[]>
 
   /**
    * 校验配置内容
@@ -183,8 +183,6 @@ export interface BackupExecutor {
 }
 
 export interface BackupExecutorOptions {
-  /** 密钥解析器 */
-  secretResolver: SecretResolver
   /** 数据库驱动工厂 */
   databaseDriverFactory: DatabaseDriverFactory
   /** 存储驱动工厂 */

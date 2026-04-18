@@ -8,8 +8,7 @@ import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import YAML from 'yaml'
 import type {
-  BackupGroup,
-  BackupGroupSpec,
+  BackupConfig,
   DatabaseType,
   StorageType,
 } from './types.js'
@@ -26,23 +25,23 @@ export class YamlConfigScanner implements ConfigScanner {
   /**
    * 扫描配置文件
    */
-  async scan(path: string): Promise<BackupGroup[]> {
+  async scan(path: string): Promise<BackupConfig[]> {
     const content = await readFile(resolve(path), 'utf-8')
-    const config = YAML.parse(content)
+    const parsed = YAML.parse(content)
 
     // 支持单个配置或数组
-    if (Array.isArray(config)) {
-      return config as BackupGroup[]
+    if (Array.isArray(parsed)) {
+      return parsed.map((config) => this.normalizeConfig(config as Record<string, unknown>))
     }
 
     // 单个配置
-    return [config as BackupGroup]
+    return [this.normalizeConfig(parsed as Record<string, unknown>)]
   }
 
   /**
    * 扫描多个配置文件
    */
-  async scanMultiple(paths: string[]): Promise<BackupGroup[]> {
+  async scanMultiple(paths: string[]): Promise<BackupConfig[]> {
     const results = await Promise.all(paths.map((p) => this.scan(p)))
     return results.flat()
   }
@@ -87,74 +86,61 @@ export class YamlConfigScanner implements ConfigScanner {
   }
 
   /**
+   * 归一化配置格式
+   */
+  private normalizeConfig(config: Record<string, unknown>): BackupConfig {
+    const name = typeof config.name === 'string' && config.name.trim().length > 0
+      ? config.name.trim()
+      : 'default-backup'
+
+    return {
+      name,
+      source: config.source as BackupConfig['source'],
+      destination: config.destination as BackupConfig['destination'],
+      schedule: config.schedule as BackupConfig['schedule'],
+      retention: config.retention as BackupConfig['retention'],
+    }
+  }
+
+  /**
    * 校验单个配置
    */
   private validateConfig(config: Record<string, unknown>, index: number, errors: ValidationError[]): void {
-    const prefix = Array.isArray(config) ? `[${index}]` : ''
+    const prefix = Array.isArray(config) ? `[${index}].` : ''
 
-    // apiVersion
-    if (config.apiVersion !== 'database-backup.yinxulai/v1') {
+    if (!config.name) {
       errors.push({
-        path: `${prefix}apiVersion`,
-        message: `apiVersion 必须是 "database-backup.yinxulai/v1"，当前为 "${config.apiVersion}"`,
+        path: `${prefix}name`,
+        message: 'name 是必填字段',
       })
     }
 
-    // kind
-    if (config.kind !== 'BackupGroup') {
+    const source = config.source as Record<string, unknown> | undefined
+    if (!source) {
       errors.push({
-        path: `${prefix}kind`,
-        message: `kind 必须是 "BackupGroup"，当前为 "${config.kind}"`,
-      })
-    }
-
-    // metadata.name
-    const metadata = config.metadata as Record<string, unknown> | undefined
-    if (!metadata?.name) {
-      errors.push({
-        path: `${prefix}metadata.name`,
-        message: 'metadata.name 是必填字段',
-      })
-    }
-
-    // spec
-    const spec = config.spec as BackupGroupSpec | undefined
-    if (!spec) {
-      errors.push({
-        path: `${prefix}spec`,
-        message: 'spec 是必填字段',
-      })
-      return
-    }
-
-    // spec.source
-    if (!spec.source) {
-      errors.push({
-        path: `${prefix}spec.source`,
-        message: 'spec.source 是必填字段',
+        path: `${prefix}source`,
+        message: 'source 是必填字段',
       })
     } else {
-      this.validateSource(spec.source as unknown as Record<string, unknown>, `${prefix}spec.source`, errors)
+      this.validateSource(source, `${prefix}source`, errors)
     }
 
-    // spec.destination
-    if (!spec.destination) {
+    const destination = config.destination as Record<string, unknown> | undefined
+    if (!destination) {
       errors.push({
-        path: `${prefix}spec.destination`,
-        message: 'spec.destination 是必填字段',
+        path: `${prefix}destination`,
+        message: 'destination 是必填字段',
       })
     } else {
-      this.validateDestination(spec.destination as unknown as Record<string, unknown>, `${prefix}spec.destination`, errors)
+      this.validateDestination(destination, `${prefix}destination`, errors)
     }
 
-    // spec.schedule (可选)
-    if (spec.schedule?.cron) {
-      if (!this.isValidCron(spec.schedule.cron)) {
-        errors.push({
-          path: `${prefix}spec.schedule.cron`,
-          message: `无效的 Cron 表达式: ${spec.schedule.cron}`,
-        })
-      }
+    const schedule = config.schedule as BackupConfig['schedule'] | undefined
+    if (schedule?.cron && !this.isValidCron(schedule.cron)) {
+      errors.push({
+        path: `${prefix}schedule.cron`,
+        message: `无效的 Cron 表达式: ${schedule.cron}`,
+      })
     }
   }
 
@@ -188,8 +174,8 @@ export class YamlConfigScanner implements ConfigScanner {
       if (!conn.username) {
         errors.push({ path: `${prefix}.connection.username`, message: 'username 是必填字段' })
       }
-      if (!conn.passwordSecretRef && !conn.password) {
-        errors.push({ path: `${prefix}.connection.passwordSecretRef`, message: 'passwordSecretRef 是必填字段' })
+      if (!conn.password) {
+        errors.push({ path: `${prefix}.connection.password`, message: 'password 是必填字段，可直接填写或使用 ${ENV_VAR}' })
       }
     }
 
@@ -231,11 +217,11 @@ export class YamlConfigScanner implements ConfigScanner {
       if (!s3.bucket) {
         errors.push({ path: `${prefix}.s3.bucket`, message: 'bucket 是必填字段' })
       }
-      if (!s3.accessKeySecretRef && !s3.accessKeyId) {
-        errors.push({ path: `${prefix}.s3.accessKeySecretRef`, message: 'accessKeySecretRef 或 accessKeyId 至少需要提供一个' })
+      if (!s3.accessKeyId) {
+        errors.push({ path: `${prefix}.s3.accessKeyId`, message: 'accessKeyId 是必填字段，可直接填写或使用 ${ENV_VAR}' })
       }
-      if (!s3.secretKeySecretRef && !s3.secretAccessKey) {
-        errors.push({ path: `${prefix}.s3.secretKeySecretRef`, message: 'secretKeySecretRef 或 secretAccessKey 至少需要提供一个' })
+      if (!s3.secretAccessKey) {
+        errors.push({ path: `${prefix}.s3.secretAccessKey`, message: 'secretAccessKey 是必填字段，可直接填写或使用 ${ENV_VAR}' })
       }
     }
   }

@@ -3,13 +3,12 @@ import { parseArgs } from 'node:util'
 import { resolve } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { createConfigScanner } from '@core/scanner'
-import { createEnvSecretResolver } from '@adapters/secret/env'
 import { createPostgreSQLDriver } from '@adapters/database/postgresql'
 import { createS3StorageDriver } from '@adapters/storage/s3'
 import { createBackupExecutor } from '@core/executor'
 import { createLogger } from '@core/logger'
-import type { SecretResolver, DatabaseDriver, StorageDriver } from '@core/interfaces'
-import type { ResolvedConfig, BackupGroup, RestoreInput } from '@core/types'
+import type { DatabaseDriver, StorageDriver } from '@core/interfaces'
+import type { ResolvedConfig, BackupConfig, RestoreInput } from '@core/types'
 
 const logger = createLogger()
 
@@ -102,18 +101,16 @@ async function runCommand(options: CliOptions): Promise<void> {
     const groups = await scanner.scan(configPath)
 
     if (groups.length === 0) {
-      logger.error('No BackupGroup found in config')
+      logger.error('No backup config found in file')
       process.exit(1)
     }
 
-    const secretResolver = createEnvSecretResolver()
     const resolvedConfigs = await Promise.all(
-      groups.map((group) => resolveConfig(group, secretResolver))
+      groups.map((group) => resolveConfig(group))
     )
 
     for (const config of resolvedConfigs) {
       const executor = createBackupExecutor({
-        secretResolver,
         databaseDriverFactory: { create: createDatabaseDriver },
         storageDriverFactory: { create: createStorageDriver },
       })
@@ -181,18 +178,16 @@ async function restoreCommand(options: CliOptions): Promise<void> {
     const groups = await scanner.scan(configPath)
 
     if (groups.length === 0) {
-      logger.error('No BackupGroup found in config')
+      logger.error('No backup config found in file')
       process.exit(1)
     }
 
-    const secretResolver = createEnvSecretResolver()
     const resolvedConfigs = await Promise.all(
-      groups.map((group) => resolveConfig(group, secretResolver))
+      groups.map((group) => resolveConfig(group))
     )
 
     for (const config of resolvedConfigs) {
       const executor = createBackupExecutor({
-        secretResolver,
         databaseDriverFactory: { create: createDatabaseDriver },
         storageDriverFactory: { create: createStorageDriver },
       })
@@ -269,30 +264,23 @@ For more information, see:
 }
 
 async function resolveConfig(
-  group: BackupGroup,
-  secretResolver: SecretResolver
+  config: BackupConfig
 ): Promise<ResolvedConfig> {
-  const { source, destination } = group.spec
+  const { source, destination } = config
 
-  const password = await resolveCredential(
+  const password = resolveCredential(
     source.connection.password,
-    source.connection.passwordSecretRef,
-    secretResolver,
     'source.connection.password'
   )
 
   let resolvedS3Config
   if (destination.type === 's3' && destination.s3) {
-    const accessKeyId = await resolveCredential(
+    const accessKeyId = resolveCredential(
       destination.s3.accessKeyId,
-      destination.s3.accessKeySecretRef,
-      secretResolver,
       'destination.s3.accessKeyId'
     )
-    const secretAccessKey = await resolveCredential(
+    const secretAccessKey = resolveCredential(
       destination.s3.secretAccessKey,
-      destination.s3.secretKeySecretRef,
-      secretResolver,
       'destination.s3.secretAccessKey'
     )
 
@@ -308,48 +296,62 @@ async function resolveConfig(
   }
 
   return {
-    group,
+    config,
     connection: {
-      host: source.connection.host,
+      host: expandEnvVars(source.connection.host, 'source.connection.host'),
       port: source.connection.port,
-      username: source.connection.username,
+      username: expandEnvVars(source.connection.username, 'source.connection.username'),
       password,
-      database: source.connection.database ?? source.database,
+      database: expandEnvVars(source.connection.database ?? source.database, 'source.database'),
       ssl: source.connection.ssl ?? false,
     },
-    s3: resolvedS3Config,
+    s3: resolvedS3Config
+      ? {
+          ...resolvedS3Config,
+          endpoint: expandEnvVars(resolvedS3Config.endpoint, 'destination.s3.endpoint'),
+          region: expandEnvVars(resolvedS3Config.region, 'destination.s3.region'),
+          bucket: expandEnvVars(resolvedS3Config.bucket, 'destination.s3.bucket'),
+          pathPrefix: resolvedS3Config.pathPrefix
+            ? expandEnvVars(resolvedS3Config.pathPrefix, 'destination.s3.pathPrefix')
+            : undefined,
+        }
+      : undefined,
   }
 }
 
-async function resolveCredential(
-  value: string | undefined,
-  ref: BackupGroup['spec']['source']['connection']['passwordSecretRef'],
-  secretResolver: SecretResolver,
-  fieldName: string
-): Promise<string> {
-  if (value !== undefined) {
-    return value
-  }
+function expandEnvVars(value: string, fieldName: string): string {
+  return value.replace(/\$\{([A-Z0-9_]+)\}/g, (_, envVar: string) => {
+    const resolved = process.env[envVar]
+    if (resolved === undefined) {
+      throw new Error(`Environment variable ${envVar} is not set for ${fieldName}`)
+    }
+    return resolved
+  })
+}
 
-  if (ref) {
-    return await secretResolver.resolve(ref)
+function resolveCredential(
+  value: string | undefined,
+  fieldName: string
+): string {
+  if (value !== undefined) {
+    return expandEnvVars(value, fieldName)
   }
 
   throw new Error(`${fieldName} is required`)
 }
 
 function createDatabaseDriver(config: ResolvedConfig): DatabaseDriver {
-  if (config.group.spec.source.type === 'postgresql') {
+  if (config.config.source.type === 'postgresql') {
     return createPostgreSQLDriver(config.connection)
   }
-  throw new Error(`Unsupported database type: ${config.group.spec.source.type}`)
+  throw new Error(`Unsupported database type: ${config.config.source.type}`)
 }
 
 function createStorageDriver(config: ResolvedConfig): StorageDriver {
-  if (config.group.spec.destination.type === 's3' && config.s3) {
+  if (config.config.destination.type === 's3' && config.s3) {
     return createS3StorageDriver(config.s3)
   }
-  throw new Error(`Unsupported storage type: ${config.group.spec.destination.type}`)
+  throw new Error(`Unsupported storage type: ${config.config.destination.type}`)
 }
 
 const isMain = import.meta.url === `file://${process.argv[1]}`

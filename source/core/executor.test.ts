@@ -66,35 +66,31 @@ describe('DefaultBackupExecutor', () => {
   let mockStorageDriver: MockStorageDriver
 
   const createMockConfig = (): ResolvedConfig => ({
-    group: {
-      apiVersion: 'database-backup.yinxulai/v1',
-      kind: 'BackupGroup',
-      metadata: { name: 'test-backup' },
-      spec: {
-        source: {
-          type: 'postgresql',
-          connection: {
-            host: 'localhost',
-            port: 5432,
-            username: 'postgres',
-            password: 'secret',
-            database: 'testdb',
-            ssl: false,
-          },
+    config: {
+      name: 'test-backup',
+      source: {
+        type: 'postgresql',
+        connection: {
+          host: 'localhost',
+          port: 5432,
+          username: 'postgres',
+          password: 'secret',
           database: 'testdb',
-          schema: 'public',
-          tables: ['users'],
+          ssl: false,
         },
-        destination: {
-          type: 's3',
-          s3: {
-            endpoint: 'https://s3.amazonaws.com',
-            region: 'us-east-1',
-            bucket: 'test-bucket',
-            accessKeyId: 'xxx',
-            secretAccessKey: 'xxx',
-            forcePathStyle: false,
-          },
+        database: 'testdb',
+        schema: 'public',
+        tables: ['users'],
+      },
+      destination: {
+        type: 's3',
+        s3: {
+          endpoint: 'https://s3.amazonaws.com',
+          region: 'us-east-1',
+          bucket: 'test-bucket',
+          accessKeyId: 'xxx',
+          secretAccessKey: 'xxx',
+          forcePathStyle: false,
         },
       },
     },
@@ -121,9 +117,6 @@ describe('DefaultBackupExecutor', () => {
     mockStorageDriver = new MockStorageDriver()
 
     executor = new DefaultBackupExecutor({
-      secretResolver: {
-        resolve: () => Promise.resolve('secret'),
-      },
       databaseDriverFactory: {
         create: () => mockDbDriver,
       },
@@ -155,7 +148,7 @@ describe('DefaultBackupExecutor', () => {
 
   it('should use pathPrefix in file key when provided', async () => {
     const config = createMockConfig()
-    config.group.spec.destination.s3!.pathPrefix = '{{.Database}}/{{.Date}}'
+    config.config.destination.s3!.pathPrefix = '{{.Database}}/{{.Date}}'
 
     const result = await executor.execute(config)
 
@@ -192,7 +185,6 @@ describe('DefaultBackupExecutor', () => {
     failingDriver.testConnection = () => Promise.resolve(false)
 
     const localExecutor = new DefaultBackupExecutor({
-      secretResolver: { resolve: () => Promise.resolve('secret') },
       databaseDriverFactory: { create: () => failingDriver },
       storageDriverFactory: { create: () => mockStorageDriver },
     })

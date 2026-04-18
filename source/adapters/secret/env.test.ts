@@ -25,7 +25,6 @@ describe('EnvSecretResolver', () => {
       process.env.TEST_DB_PASSWORD = 'my-secret-password'
 
       const ref: SecretRef = {
-        type: 'env',
         envVar: 'TEST_DB_PASSWORD',
       }
 
@@ -35,7 +34,6 @@ describe('EnvSecretResolver', () => {
 
     it('should throw when env var does not exist', async () => {
       const ref: SecretRef = {
-        type: 'env',
         envVar: 'NON_EXISTENT_VAR_12345',
       }
 
@@ -44,28 +42,22 @@ describe('EnvSecretResolver', () => {
 
     it('should throw when envVar is not provided', async () => {
       const ref = {
-        type: 'env' as const,
         // envVar is intentionally missing
       }
 
       await expect(resolver.resolve(ref as SecretRef)).rejects.toThrow('envVar 是必填字段')
     })
 
-    it('should throw when secret type is not env', async () => {
-      const ref: SecretRef = {
-        type: 'k8s',
-        secretName: 'my-secret',
-        secretKey: 'password',
-      }
+    it('should throw when envVar is missing on a malformed ref', async () => {
+      const ref: SecretRef = {}
 
-      await expect(resolver.resolve(ref)).rejects.toThrow('EnvSecretResolver 不支持')
+      await expect(resolver.resolve(ref)).rejects.toThrow('envVar 是必填字段')
     })
 
     it('should handle empty string value', async () => {
       process.env.TEST_EMPTY_PASSWORD = ''
 
       const ref: SecretRef = {
-        type: 'env',
         envVar: 'TEST_EMPTY_PASSWORD',
       }
 
@@ -77,7 +69,6 @@ describe('EnvSecretResolver', () => {
       process.env.TEST_SPECIAL_PASSWORD = 'p@ss!#$%^&*()_+-=[]{}|;:\',.<>?/'
 
       const ref: SecretRef = {
-        type: 'env',
         envVar: 'TEST_SPECIAL_PASSWORD',
       }
 

@@ -29,30 +29,28 @@ yarn add @yinxulai/database-backup
 
 ### 1. 创建配置文件
 
+> 仅支持普通的顶层 YAML 结构。旧的类 Kubernetes 包裹写法已不再支持。
+
 ```yaml
 # backup.yaml
-apiVersion: database-backup.yinxulai/v1
-kind: BackupGroup
-metadata:
-  name: my-database-backup
-spec:
-  source:
-    type: postgresql
-    connection:
-      host: localhost
-      port: 5432
-      username: postgres
-      password: ${DB_PASSWORD}  # 环境变量引用
-    database: myapp
-    tables: ["*"]  # 空或省略 = 所有表
-  destination:
-    type: s3
-    s3:
-      endpoint: https://s3.amazonaws.com
-      region: us-east-1
-      bucket: my-backups
-      accessKeyId: ${AWS_ACCESS_KEY_ID}
-      secretAccessKey: ${AWS_SECRET_ACCESS_KEY}
+name: my-database-backup
+source:
+  type: postgresql
+  connection:
+    host: localhost
+    port: 5432
+    username: postgres
+    password: ${DB_PASSWORD}   # 也可以直接写明文密码
+  database: myapp
+  tables: ["*"]  # 空或省略 = 所有表
+destination:
+  type: s3
+  s3:
+    endpoint: https://s3.amazonaws.com
+    region: us-east-1
+    bucket: my-backups
+    accessKeyId: ${AWS_ACCESS_KEY_ID}
+    secretAccessKey: ${AWS_SECRET_ACCESS_KEY}
 ```
 
 ### 2. 执行备份
@@ -70,73 +68,52 @@ backup run --config backup.yaml
 
 ## 配置说明
 
-### BackupGroup 结构
+### 配置结构
 
 ```yaml
-apiVersion: database-backup.yinxulai/v1
-kind: BackupGroup
-metadata:
-  name: 备份组名称
-spec:
-  # 源数据库配置
-  source:
-    type: postgresql           # 目前仅支持 postgresql
-    connection:
-      host: string
-      port: number             # 默认: 5432
-      username: string
-      password?: string        # 明文，适合本地测试
-      passwordSecretRef?:
-        type: env | k8s
-        envVar?: string
-        secretName?: string
-        secretKey?: string
-    database: string
+name: 备份任务名称
 
-  # 默认目标存储（可在任务级别覆盖）
-  destination:
-    type: s3
-    s3:
-      endpoint: string
-      region: string
-      bucket: string
-      accessKeyId?: string     # 明文，适合本地测试
-      secretAccessKey?: string # 明文，适合本地测试
-      accessKeySecretRef?:
-        type: env | k8s
-        envVar?: string
-        secretName?: string
-        secretKey?: string
-      secretKeySecretRef?:
-        type: env | k8s
-        envVar?: string
-        secretName?: string
-        secretKey?: string
-      pathPrefix?: string      # 可选路径前缀
+# 源数据库配置
+source:
+  type: postgresql             # 目前仅支持 postgresql
+  connection:
+    host: string
+    port: number               # 默认: 5432
+    username: string
+    password: string           # 明文，或 ${DB_PASSWORD}
+  database: string
+  schema?: string
+  tables: ["*"]                # 空 = 全库
 
-  # 备份任务列表
-      destination:             # 可选：覆盖默认目标
-        type: s3
-        s3:
-          # ... 目标存储配置
+# 目标存储配置
+destination:
+  type: s3
+  s3:
+    endpoint: string
+    region: string
+    bucket: string
+    accessKeyId: string        # 明文，或 ${AWS_ACCESS_KEY_ID}
+    secretAccessKey: string    # 明文，或 ${AWS_SECRET_ACCESS_KEY}
+    pathPrefix?: string        # 可选路径前缀
+
+# 保留策略（可选）
+retention:
+  retentionDays: 7
 ```
+
+现在仅支持普通的顶层 YAML 配置结构。
 
 ### 凭证配置方式
 
-支持两种方式：
+直接写普通字符串即可，也支持环境变量占位符：
 
 ```yaml
-# 方式一：直接写明文（适合本地测试）
 password: your-db-password
-accessKeyId: your-access-key
-secretAccessKey: your-secret-key
-```
+# 或
+password: ${DB_PASSWORD}
 
-```yaml
-# 方式二：使用 SecretRef（推荐生产环境）
-passwordSecretRef:
-  type: env
-  envVar: DB_PASSWORD
+accessKeyId: ${AWS_ACCESS_KEY_ID}
+secretAccessKey: ${AWS_SECRET_ACCESS_KEY}
 ```
 
 ## CLI 用法
@@ -221,37 +198,24 @@ schedule: "0 2 * * *"  # 每天凌晨 2 点
 
 config:
   content: |
-    apiVersion: database-backup.yinxulai/v1
-    kind: BackupGroup
-    metadata:
-      name: my-backup
-    spec:
-      source:
-        type: postgresql
-        connection:
-          host: postgres.database.svc.cluster.local
-          port: 5432
-          username: postgres
-          passwordSecretRef:
-            type: k8s
-            secretName: postgres-secret
-            secretKey: password
-        database: myapp
-    tables: ["*"]  # 空或省略 = 所有表
-      destination:
-        type: s3
-        s3:
-          endpoint: https://s3.amazonaws.com
-          region: us-east-1
-          bucket: my-backups
-          accessKeySecretRef:
-            type: k8s
-            secretName: aws-secret
-            secretKey: access-key-id
-          secretKeySecretRef:
-            type: k8s
-            secretName: aws-secret
-            secretKey: secret-access-key
+    name: my-backup
+    source:
+      type: postgresql
+      connection:
+        host: postgres.database.svc.cluster.local
+        port: 5432
+        username: postgres
+        password: ${DB_PASSWORD}
+      database: myapp
+      tables: ["*"]  # 空或省略 = 所有表
+    destination:
+      type: s3
+      s3:
+        endpoint: https://s3.amazonaws.com
+        region: us-east-1
+        bucket: my-backups
+        accessKeyId: ${AWS_ACCESS_KEY_ID}
+        secretAccessKey: ${AWS_SECRET_ACCESS_KEY}
 
 env:
   - name: AWS_ACCESS_KEY_ID

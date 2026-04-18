@@ -15,10 +15,6 @@ export class EnvSecretResolver implements SecretResolver {
    * 解析密钥引用
    */
   async resolve(ref: SecretRef): Promise<string> {
-    if (ref.type !== 'env') {
-      throw new Error(`EnvSecretResolver 不支持 SecretRef 类型: ${ref.type}`)
-    }
-
     if (!ref.envVar) {
       throw new Error('SecretRef.envVar 是必填字段')
     }

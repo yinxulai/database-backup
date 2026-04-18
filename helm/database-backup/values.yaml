@@ -31,36 +31,23 @@ ttlSecondsAfterFinished: ""
 # Backup configuration (YAML content)
 config:
   content: |
-    # apiVersion: database-backup.yinxulai/v1
-    # kind: BackupGroup
-    # metadata:
-    #   name: my-backup
-    # spec:
-    #   source:
-    #     type: postgresql
-    #     connection:
-    #       host: postgres.database.svc.cluster.local
-    #       port: 5432
-    #       username: postgres
-    #       passwordSecretRef:
-    #         type: k8s
-    #         secretName: postgres-secret
-    #         secretKey: password
-    #     database: myapp
-    #   destination:
-    #     type: s3
-    #     s3:
-    #       endpoint: https://s3.amazonaws.com
-    #       region: us-east-1
-    #       bucket: my-backups
-    #       accessKeySecretRef:
-    #         type: k8s
-    #         secretName: aws-secret
-    #         secretKey: access-key-id
-    #       secretKeySecretRef:
-    #         type: k8s
-    #         secretName: aws-secret
-    #         secretKey: secret-access-key
+    name: my-backup
+    source:
+      type: postgresql
+      connection:
+        host: postgres.database.svc.cluster.local
+        port: 5432
+        username: postgres
+        password: ${DB_PASSWORD}
+      database: myapp
+    destination:
+      type: s3
+      s3:
+        endpoint: https://s3.amazonaws.com
+        region: us-east-1
+        bucket: my-backups
+        accessKeyId: ${AWS_ACCESS_KEY_ID}
+        secretAccessKey: ${AWS_SECRET_ACCESS_KEY}
 
 # Environment variables
 env: []

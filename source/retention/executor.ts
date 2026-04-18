@@ -34,10 +34,10 @@ export class RetentionExecutor {
     config: ResolvedConfig,
     options: RetentionOptions = {}
   ): Promise<RetentionResult> {
-    const log = this.logger.child(config.group.metadata.name)
+    const log = this.logger.child(config.config.name)
 
     const result: RetentionResult = {
-      taskName: config.group.metadata.name,
+      taskName: config.config.name,
       status: 'completed',
       scannedCount: 0,
       deleteCount: 0,
@@ -45,7 +45,7 @@ export class RetentionExecutor {
       deletedFiles: [],
     }
 
-    const retention = config.group.spec.retention
+    const retention = config.config.retention
     if (!retention) {
       log.info('No retention policy configured, skipping')
       return result

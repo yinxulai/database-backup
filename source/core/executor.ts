@@ -61,12 +61,12 @@ export class DefaultBackupExecutor implements BackupExecutor {
 
     const result: BackupResult = {
       id: randomUUID(),
-      taskName: config.group.metadata.name,
+      taskName: config.config.name,
       status: 'running',
       startTime: new Date(),
     }
 
-    const { source, destination } = config.group.spec
+    const { source, destination } = config.config
 
     // Create database and storage drivers
     const dbDriver = this.options.databaseDriverFactory.create(config)
@@ -77,7 +77,7 @@ export class DefaultBackupExecutor implements BackupExecutor {
       log.info('Testing database connection', { type: source.type, database: source.database })
       const connected = await dbDriver.testConnection()
       if (!connected) {
-        throw new BackupExecutionError('CONNECTION_FAILED', config.group.metadata.name, 'Database connection failed')
+        throw new BackupExecutionError('CONNECTION_FAILED', config.config.name, 'Database connection failed')
       }
       log.info('Database connection successful')
 
@@ -284,7 +284,7 @@ export class DefaultBackupExecutor implements BackupExecutor {
    * Generate file key for backup
    */
   private generateFileKey(config: ResolvedConfig): string {
-    const { source, destination } = config.group.spec
+    const { source, destination } = config.config
     const now = new Date()
     const date = now.toISOString().split('T')[0]
     const time = now.toTimeString().split(' ')[0].replace(/:/g, '-')
