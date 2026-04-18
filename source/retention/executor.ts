@@ -1,15 +1,8 @@
-/**
- * @fileoverview Retention executor implementation
- * @module @yinxulai/database-backup/retention/executor
- */
 
 import type { StorageDriver } from '../core/interfaces.js'
 import type { ResolvedConfig } from '../core/types.js'
 import { createLogger, type Logger } from '../core/logger.js'
 
-/**
- * Retention result
- */
 export interface RetentionResult {
   taskName: string
   status: 'completed' | 'failed'
@@ -20,16 +13,10 @@ export interface RetentionResult {
   deletedFiles: string[]
 }
 
-/**
- * Retention options
- */
 export interface RetentionOptions {
   dryRun?: boolean
 }
 
-/**
- * Retention executor
- */
 export class RetentionExecutor {
   private logger: Logger
 
@@ -144,9 +131,6 @@ export class RetentionExecutor {
   }
 }
 
-/**
- * Create retention executor
- */
 export function createRetentionExecutor(storageDriver: StorageDriver, logger?: Logger): RetentionExecutor {
   return new RetentionExecutor(storageDriver, logger)
 }

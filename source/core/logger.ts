@@ -1,7 +1,3 @@
-/**
- * @fileoverview Structured JSON logger
- * @module @yinxulai/database-backup/core/logger
- */
 
 export interface LogEntry {
   level: 'debug' | 'info' | 'warn' | 'error'

@@ -1,8 +1,3 @@
-/**
- * 核心接口定义
- * 
- * 定义模块间通信的接口契约
- */
 
 import type { Readable } from 'node:stream'
 import type {
@@ -17,11 +12,6 @@ import type {
 // Re-export BackupError so implementations can use it
 export { BackupExecutionError as BackupError } from './executor.js'
 
-/**
- * 密钥解析器
- * 
- * 负责解析 SecretRef 获取实际密钥值
- */
 export interface SecretResolver {
   /**
    * 解析密钥引用
@@ -31,11 +21,6 @@ export interface SecretResolver {
   resolve(ref: SecretRef): Promise<string>
 }
 
-/**
- * 数据库驱动
- * 
- * 负责数据库连接和备份操作
- */
 export interface DatabaseDriver {
   /** 数据库类型 */
   readonly type: string
@@ -59,11 +44,6 @@ export interface DatabaseDriver {
   close(): Promise<void>
 }
 
-/**
- * 存储驱动
- * 
- * 负责将备份数据上传到存储
- */
 export interface StorageDriver {
   /** 存储类型 */
   readonly type: string
@@ -90,11 +70,6 @@ export interface StorageDriver {
   list(prefix?: string): Promise<StorageObject[]>
 }
 
-/**
- * 配置扫描器
- * 
- * 负责读取和解析配置文件
- */
 export interface ConfigScanner {
   /**
    * 扫描配置文件
@@ -118,9 +93,6 @@ export interface ConfigScanner {
   validate(content: string): ValidationResult
 }
 
-/**
- * 配置校验结果
- */
 export interface ValidationResult {
   /** 是否有效 */
   valid: boolean
@@ -128,9 +100,6 @@ export interface ValidationResult {
   errors: ValidationError[]
 }
 
-/**
- * 配置校验错误
- */
 export interface ValidationError {
   /** 错误路径 */
   path: string
@@ -138,14 +107,6 @@ export interface ValidationError {
   message: string
 }
 
-/**
- * 结果存储器
- * 
- * 负责存储和查询备份结果
- */
-/**
- * 存储对象元数据
- */
 export interface StorageObject {
   /** 存储路径 */
   key: string
@@ -155,9 +116,6 @@ export interface StorageObject {
   lastModified: Date
 }
 
-/**
- * 结果存储器
- */
 export interface ResultStore {
   /**
    * 保存备份结果
@@ -181,11 +139,6 @@ export interface ResultStore {
   get(id: string): Promise<BackupResult | null>
 }
 
-/**
- * 备份执行器
- * 
- * 核心备份执行逻辑
- */
 export interface BackupExecutor {
   /**
    * 执行备份
@@ -204,9 +157,6 @@ export interface BackupExecutor {
   executeTo(config: ResolvedConfig, outputKey?: string, dryRun?: boolean): Promise<BackupResult>
 }
 
-/**
- * 备份执行器选项
- */
 export interface BackupExecutorOptions {
   /** 密钥解析器 */
   secretResolver: SecretResolver
@@ -218,9 +168,6 @@ export interface BackupExecutorOptions {
   resultStore?: ResultStore
 }
 
-/**
- * 数据库驱动工厂
- */
 export interface DatabaseDriverFactory {
   /**
    * 创建数据库驱动
@@ -230,9 +177,6 @@ export interface DatabaseDriverFactory {
   create(config: ResolvedConfig): DatabaseDriver
 }
 
-/**
- * 存储驱动工厂
- */
 export interface StorageDriverFactory {
   /**
    * 创建存储驱动
@@ -242,9 +186,6 @@ export interface StorageDriverFactory {
   create(config: ResolvedConfig): StorageDriver
 }
 
-/**
- * 备份错误代码
- */
 export type BackupErrorCode =
   | 'CONNECTION_FAILED'
   | 'DUMP_FAILED'

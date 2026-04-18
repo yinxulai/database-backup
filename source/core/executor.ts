@@ -1,7 +1,3 @@
-/**
- * @fileoverview Backup executor implementation
- * @module @yinxulai/database-backup/core/executor
- */
 
 import { randomUUID } from 'node:crypto'
 import { createHash } from 'node:crypto'
@@ -21,18 +17,12 @@ import type {
 } from './interfaces.js'
 import { createLogger, type Logger } from './logger.js'
 
-/**
- * Default retry configuration
- */
 const DEFAULT_RETRY_CONFIG = {
   maxAttempts: 3,
   initialDelayMs: 1000,
   backoffMultiplier: 2,
 }
 
-/**
- * Backup execution error
- */
 export class BackupExecutionError extends Error {
   constructor(
     public readonly code: BackupErrorCode,
@@ -45,9 +35,6 @@ export class BackupExecutionError extends Error {
   }
 }
 
-/**
- * Default backup executor implementation
- */
 export class DefaultBackupExecutor implements BackupExecutor {
   private retryConfig = DEFAULT_RETRY_CONFIG
   private logger: Logger
@@ -261,9 +248,6 @@ export class DefaultBackupExecutor implements BackupExecutor {
   }
 }
 
-/**
- * Create backup executor
- */
 export function createBackupExecutor(options: BackupExecutorOptions, logger?: Logger): BackupExecutor {
   return new DefaultBackupExecutor(options, logger)
 }

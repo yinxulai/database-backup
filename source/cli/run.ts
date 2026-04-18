@@ -1,7 +1,3 @@
-/**
- * @fileoverview CLI entry point
- * @module @yinxulai/database-backup/cli/run
- */
 
 import { parseArgs } from 'node:util'
 import { resolve } from 'node:path'

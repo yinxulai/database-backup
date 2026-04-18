@@ -1,24 +1,14 @@
-/**
- * @fileoverview Health check HTTP server
- * @module @yinxulai/database-backup/health/server
- */
 
 import { createServer, type Server } from 'node:http'
 import type { DatabaseDriver } from '../core/interfaces.js'
 import type { HealthStatus } from './types.js'
 
-/**
- * Health check server options
- */
 export interface HealthServerOptions {
   port: number
   databaseDrivers: DatabaseDriver[]
   handler?: (path: string) => Promise<HealthStatus>
 }
 
-/**
- * Create health check server
- */
 export function createHealthServer(options: HealthServerOptions): Server {
   const { port, databaseDrivers } = options
 
@@ -61,9 +51,6 @@ export function createHealthServer(options: HealthServerOptions): Server {
   return server
 }
 
-/**
- * Check readiness
- */
 async function checkReadiness(drivers: DatabaseDriver[]): Promise<HealthStatus> {
   const checks: HealthStatus['checks'] = {}
   let allHealthy = true
