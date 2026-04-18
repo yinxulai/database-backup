@@ -20,7 +20,8 @@
     "build": "tsc -p tsconfig.json",
     "build:sea": "node scripts/build-sea.mjs",
     "prepack": "pnpm build",
-    "test": "vitest",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "test:e2e": "vitest run tests/e2e",
     "clean": "rm -rf output sea out",
     "lint": "eslint source --ext .ts"

@@ -18,5 +18,5 @@
     "isolatedModules": true
   },
   "include": ["source/**/*"],
-  "exclude": ["node_modules", "output", "sea", "out", "tests"]
+  "exclude": ["node_modules", "output", "sea", "out", "**/*.test.ts"]
 }

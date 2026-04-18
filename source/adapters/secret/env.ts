@@ -24,7 +24,8 @@ export class EnvSecretResolver implements SecretResolver {
     }
 
     const value = process.env[ref.envVar]
-    if (!value) {
+    // 空字符串是有效值，只检查 undefined
+    if (value === undefined) {
       throw new Error(`环境变量未设置: ${ref.envVar}`)
     }
 
