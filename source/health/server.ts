@@ -1,7 +1,6 @@
 /**
- * Health Check HTTP Server
- * 
- * 提供 /health/live 和 /health/ready 端点
+ * @fileoverview Health check HTTP server
+ * @module @taicode/backup/health/server
  */
 
 import { createServer, type Server } from 'node:http'
@@ -9,19 +8,16 @@ import type { DatabaseDriver } from '../core/interfaces.js'
 import type { HealthStatus } from './types.js'
 
 /**
- * 健康检查服务器选项
+ * Health check server options
  */
 export interface HealthServerOptions {
-  /** HTTP 端口 */
   port: number
-  /** 数据库驱动列表（用于 readiness 检查）*/
   databaseDrivers: DatabaseDriver[]
-  /** 健康检查处理器 */
   handler?: (path: string) => Promise<HealthStatus>
 }
 
 /**
- * 创建健康检查服务器
+ * Create health check server
  */
 export function createHealthServer(options: HealthServerOptions): Server {
   const { port, databaseDrivers } = options
@@ -29,12 +25,10 @@ export function createHealthServer(options: HealthServerOptions): Server {
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://localhost:${port}`)
 
-    // CORS headers for k8s probes
     res.setHeader('Access-Control-Allow-Origin', '*')
     res.setHeader('Content-Type', 'application/json')
 
     if (url.pathname === '/health/live') {
-      // Liveness probe - 进程是否存活
       const status: HealthStatus = {
         status: 'ok',
         timestamp: new Date().toISOString(),
@@ -46,7 +40,6 @@ export function createHealthServer(options: HealthServerOptions): Server {
     }
 
     if (url.pathname === '/health/ready') {
-      // Readiness probe - 数据库连接是否正常
       const result = await checkReadiness(databaseDrivers)
       res.statusCode = result.status === 'ok' ? 200 : 503
       res.end(JSON.stringify(result))
@@ -54,7 +47,6 @@ export function createHealthServer(options: HealthServerOptions): Server {
     }
 
     if (url.pathname === '/health') {
-      // Summary endpoint
       const result = await checkReadiness(databaseDrivers)
       res.statusCode = result.status === 'ok' ? 200 : 503
       res.end(JSON.stringify(result))
@@ -70,7 +62,7 @@ export function createHealthServer(options: HealthServerOptions): Server {
 }
 
 /**
- * 检查就绪状态
+ * Check readiness
  */
 async function checkReadiness(drivers: DatabaseDriver[]): Promise<HealthStatus> {
   const checks: HealthStatus['checks'] = {}

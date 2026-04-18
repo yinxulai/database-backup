@@ -1,8 +1,5 @@
 /**
- * Database Backup
- * 
- * Multi-mode database backup tool with CI-first architecture
- * 
+ * @fileoverview Database backup library entry point
  * @module @taicode/backup
  */
 

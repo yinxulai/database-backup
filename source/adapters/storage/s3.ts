@@ -1,7 +1,6 @@
 /**
- * S3 存储驱动
- * 
- * 使用 AWS SDK 上传备份文件到 S3
+ * @fileoverview S3 storage driver
+ * @module @taicode/backup/adapters/storage/s3
  */
 
 import { Readable } from 'node:stream'
@@ -16,15 +15,20 @@ import {
 import type { StorageObject } from '../../core/interfaces.js'
 import type { ResolvedS3Config, UploadResult } from '../../core/types.js'
 import type { StorageDriver } from '../../core/interfaces.js'
+import { createLogger, type Logger } from '../../core/logger.js'
 
 /**
- * S3 存储驱动
+ * S3 storage driver implementation
  */
 export class S3StorageDriver implements StorageDriver {
   readonly type = 's3'
   private client: S3Client
+  private logger: Logger
 
-  constructor(private config: ResolvedS3Config) {
+  constructor(
+    private config: ResolvedS3Config,
+    logger?: Logger
+  ) {
     this.client = new S3Client({
       region: config.region,
       endpoint: config.endpoint,
@@ -34,19 +38,22 @@ export class S3StorageDriver implements StorageDriver {
       },
       forcePathStyle: config.forcePathStyle,
     })
+    this.logger = logger ?? createLogger()
   }
 
   /**
-   * 上传数据到 S3
+   * Upload data to S3
    */
   async upload(data: NodeReadable, key: string): Promise<UploadResult> {
     const fullKey = this.config.pathPrefix
       ? `${this.config.pathPrefix}/${key}`
       : key
 
+    this.logger.debug('S3 upload started', { key: fullKey, bucket: this.config.bucket })
+
     const startTime = Date.now()
 
-    // 将流转换为 Buffer
+    // Convert stream to buffer
     const chunks: Buffer[] = []
     for await (const chunk of data) {
       chunks.push(Buffer.from(chunk))
@@ -64,6 +71,13 @@ export class S3StorageDriver implements StorageDriver {
 
     const duration = Math.round((Date.now() - startTime) / 1000)
 
+    this.logger.info('S3 upload completed', {
+      key: fullKey,
+      size: body.length,
+      duration,
+      bucket: this.config.bucket
+    })
+
     return {
       key: fullKey,
       size: body.length,
@@ -73,12 +87,14 @@ export class S3StorageDriver implements StorageDriver {
   }
 
   /**
-   * 删除 S3 对象
+   * Delete S3 object
    */
   async delete(key: string): Promise<void> {
     const fullKey = this.config.pathPrefix
       ? `${this.config.pathPrefix}/${key}`
       : key
+
+    this.logger.debug('S3 delete started', { key: fullKey, bucket: this.config.bucket })
 
     const command = new DeleteObjectCommand({
       Bucket: this.config.bucket,
@@ -86,10 +102,12 @@ export class S3StorageDriver implements StorageDriver {
     })
 
     await this.client.send(command)
+
+    this.logger.info('S3 delete completed', { key: fullKey, bucket: this.config.bucket })
   }
 
   /**
-   * 列出存储对象
+   * List S3 objects
    */
   async list(prefix?: string): Promise<StorageObject[]> {
     const fullPrefix = prefix
@@ -97,6 +115,8 @@ export class S3StorageDriver implements StorageDriver {
         ? `${this.config.pathPrefix}/${prefix}`
         : prefix
       : this.config.pathPrefix ?? ''
+
+    this.logger.debug('S3 list started', { prefix: fullPrefix, bucket: this.config.bucket })
 
     const objects: StorageObject[] = []
     let continuationToken: string | undefined
@@ -125,16 +145,24 @@ export class S3StorageDriver implements StorageDriver {
       continuationToken = response.NextContinuationToken
     } while (continuationToken)
 
+    this.logger.debug('S3 list completed', {
+      prefix: fullPrefix,
+      count: objects.length,
+      bucket: this.config.bucket
+    })
+
     return objects
   }
 
   /**
-   * 获取对象元数据
+   * Get S3 object metadata
    */
   async head(key: string): Promise<{ size: number; lastModified: Date } | null> {
     const fullKey = this.config.pathPrefix
       ? `${this.config.pathPrefix}/${key}`
       : key
+
+    this.logger.debug('S3 head started', { key: fullKey, bucket: this.config.bucket })
 
     try {
       const command = new HeadObjectCommand({
@@ -143,19 +171,23 @@ export class S3StorageDriver implements StorageDriver {
       })
 
       const response = await this.client.send(command)
+
+      this.logger.debug('S3 head completed', { key: fullKey, size: response.ContentLength })
+
       return {
         size: response.ContentLength ?? 0,
         lastModified: response.LastModified ?? new Date(),
       }
     } catch {
+      this.logger.debug('S3 head failed', { key: fullKey })
       return null
     }
   }
 }
 
 /**
- * 创建 S3 存储驱动
+ * Create S3 storage driver
  */
-export function createS3StorageDriver(config: ResolvedS3Config): StorageDriver {
-  return new S3StorageDriver(config)
+export function createS3StorageDriver(config: ResolvedS3Config, logger?: Logger): StorageDriver {
+  return new S3StorageDriver(config, logger)
 }
