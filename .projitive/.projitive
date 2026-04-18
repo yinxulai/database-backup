@@ -111,6 +111,46 @@
       "links": [],
       "roadmapRefs": [],
       "recordVersion": 3
+    },
+    {
+      "id": "TASK-0010",
+      "title": "评估并设计多目的地备份支持",
+      "status": "TODO",
+      "owner": "unassigned",
+      "summary": "支持单次数据库导出后，将同一份备份产物分发到多个目的地，以满足异地容灾、双云冗余和本地归档场景。要求保持当前普通 YAML 的简洁风格，不引入复杂层级；需要明确 destination 与 destinations 的配置方案、单次 dump 多路上传的执行模型、dry-run 行为、失败语义、日志输出以及验收标准。优先目标是避免重复压库。",
+      "updatedAt": "2026-04-18T13:24:01.596Z",
+      "links": [
+        "designs/research/TASK-0010.implementation-research.md",
+        "source/core/executor.ts",
+        "source/cli/run.ts",
+        "source/core/types.ts"
+      ],
+      "roadmapRefs": [],
+      "subState": {
+        "phase": "discovery",
+        "confidence": 0.92
+      },
+      "recordVersion": 1
+    },
+    {
+      "id": "TASK-0011",
+      "title": "评估并设计多 schema 备份支持",
+      "status": "TODO",
+      "owner": "unassigned",
+      "summary": "评估 PostgreSQL 同时备份多个 schema 的必要性与最小实现方案，在不破坏当前简单 YAML 模型的前提下，明确 schema 与 schemas 的配置方式、与 tables 的组合规则、对 pg_dump 参数的影响、恢复边界以及验收标准。该能力作为第二阶段增强进行设计。",
+      "updatedAt": "2026-04-18T13:24:01.596Z",
+      "links": [
+        "designs/research/TASK-0011.implementation-research.md",
+        "source/adapters/database/postgresql.ts",
+        "source/core/types.ts",
+        "source/core/scanner.ts"
+      ],
+      "roadmapRefs": [],
+      "subState": {
+        "phase": "discovery",
+        "confidence": 0.88
+      },
+      "recordVersion": 1
     }
   ],
   "roadmaps": [
@@ -124,7 +164,7 @@
     }
   ],
   "meta": {
-    "tasks_version": 26,
+    "tasks_version": 28,
     "roadmaps_version": 1,
     "store_schema_version": 3
   },
@@ -132,9 +172,9 @@
     "tasks_markdown": {
       "name": "tasks_markdown",
       "dirty": false,
-      "lastSourceVersion": 26,
-      "lastBuiltAt": "2026-04-18T07:26:05.979Z",
-      "recordVersion": 78
+      "lastSourceVersion": 28,
+      "lastBuiltAt": "2026-04-18T13:24:01.604Z",
+      "recordVersion": 83
     },
     "roadmaps_markdown": {
       "name": "roadmaps_markdown",
