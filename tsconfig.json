@@ -5,14 +5,12 @@
     "moduleResolution": "bundler",
     "allowJs": true,
     "allowImportingTsExtensions": true,
-    "ignoreDeprecations": "6.0",
     "types": ["node"],
-    "baseUrl": ".",
     "paths": {
-      "@core/*": ["source/core/*"],
-      "@adapters/*": ["source/adapters/*"],
-      "@health/*": ["source/health/*"],
-      "@retention/*": ["source/retention/*"]
+      "@core/*": ["./source/core/*"],
+      "@adapters/*": ["./source/adapters/*"],
+      "@health/*": ["./source/health/*"],
+      "@retention/*": ["./source/retention/*"]
     },
     "outDir": "./output",
     "rootDir": "./source",
