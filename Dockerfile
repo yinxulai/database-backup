@@ -12,22 +12,22 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
 RUN corepack enable && pnpm install --frozen-lockfile
 
-# Copy source and build
+# Copy source
 COPY . .
-RUN pnpm build
-
-# SEA binary build (if available)
-RUN pnpm build:sea || true
 
 # Production stage
 FROM node:${NODE_VERSION}-slim AS production
 
 LABEL org.opencontainers.image.title="database-backup"
 LABEL org.opencontainers.image.description="Multi-mode database backup tool"
-LABEL org.opencontainers.image.source="https://github.com/${{ github.repository }}"
+LABEL org.opencontainers.image.source="https://github.com/${github.repository}"
 LABEL org.opencontainers.image.version="${VERSION}"
 
 WORKDIR /app
+
+# Install dependencies and tsx for running TypeScript directly
+COPY package.json pnpm-lock.yaml ./
+RUN corepack enable && pnpm install --frozen-lockfile --prod
 
 # Install dumb-init for proper signal handling
 RUN apt-get update && apt-get install -y --no-install-recommends dumb-init && rm -rf /var/lib/apt/lists/*
@@ -36,19 +36,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends dumb-init && rm
 RUN groupadd --gid 1000 appgroup && \
     useradd --uid 1000 --gid appgroup --shell /bin/false --create-home appuser
 
-# Copy built artifacts
-COPY --from=builder /app/output ./output
-COPY --from=builder /app/out ./out
+# Copy source code
+COPY --from=builder /app/source ./source
 COPY --from=builder /app/configs ./configs
-
-# Copy SEA binary if built
-COPY --from=builder /app/out/backup-* ./backup 2>/dev/null || true
 
 # Switch to non-root user
 USER appuser
 
-# Default command - show help
-CMD ["node", "output/cli/run.js", "--help"]
-
-# Alternative: run SEA binary directly
-# CMD ["./backup", "--help"]
+# Run directly with tsx (no build step needed)
+CMD ["pnpm", "dev", "--", "--help"]
