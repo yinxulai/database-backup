@@ -108,6 +108,7 @@ export class PostgreSQLDriver implements DatabaseDriver {
    */
   private async restoreWithPgRestore(
     options: RestoreOptions,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     spawn: (command: string, args?: string[], options?: any) => any
   ): Promise<Writable> {
     const args = this.buildPgRestoreArgs(options)
@@ -130,6 +131,7 @@ export class PostgreSQLDriver implements DatabaseDriver {
    */
   private async restoreWithPsql(
     options: RestoreOptions,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     spawn: (command: string, args?: string[], options?: any) => any
   ): Promise<Writable> {
     const args = this.buildPsqlArgs(options)

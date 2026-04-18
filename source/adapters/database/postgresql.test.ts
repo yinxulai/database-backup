@@ -49,6 +49,7 @@ describe('PostgreSQLDriver', () => {
           stderr: { on: vi.fn() },
           on: vi.fn().mockReturnThis(),
           kill: vi.fn(),
+        /* eslint-disable @typescript-eslint/no-explicit-any */
         } as any)
 
       // 直接测试 dump 方法的 spawn 调用
