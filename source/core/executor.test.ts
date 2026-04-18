@@ -79,8 +79,7 @@ describe('DefaultBackupExecutor', () => {
           ssl: false,
         },
         database: 'testdb',
-        schema: 'public',
-        tables: ['users'],
+        tables: ['public.users'],
       },
       destination: {
         type: 's3',
@@ -148,11 +147,15 @@ describe('DefaultBackupExecutor', () => {
 
   it('should use pathPrefix in file key when provided', async () => {
     const config = createMockConfig()
-    config.config.destination.s3!.pathPrefix = '{{.Database}}/{{.Date}}'
+    config.config.destination.s3!.pathPrefix = '{{.Schema}}/{{.Database}}/{{.Date}}'
+    config.s3!.pathPrefix = '{{.Schema}}/{{.Database}}/{{.Date}}'
 
     const result = await executor.execute(config)
 
-    expect(result.fileKey).toContain('testdb/')
+    expect(result.fileKey).toContain('public/testdb/')
+    expect(result.fileKey).not.toContain('{{.Schema}}')
+    expect(result.fileKey).not.toContain('{{.Database}}')
+    expect(result.fileKey).not.toContain('{{.Date}}')
   })
 
   it('should call database dump', async () => {
@@ -177,7 +180,7 @@ describe('DefaultBackupExecutor', () => {
     expect(result.startTime).toBeInstanceOf(Date)
     expect(result.endTime).toBeInstanceOf(Date)
     expect(result.duration).toBeGreaterThanOrEqual(0)
-    expect(result.tables).toEqual(['users'])
+    expect(result.tables).toEqual(['public.users'])
   })
 
   it('should set failed status when connection fails', async () => {

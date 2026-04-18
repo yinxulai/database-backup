@@ -148,7 +148,7 @@ describe('PostgreSQLDriver', () => {
       await expect(streamResult).resolves.toContain('pg_dump exited with code 1')
     })
 
-    it('should dump all schemas when schema is omitted', async () => {
+    it('should dump all schemas when no table filter is provided', async () => {
       const mockSpawn = vi.fn()
         .mockReturnValue({
           stdout: { on: vi.fn().mockReturnThis(), pipe: vi.fn() },
@@ -196,6 +196,31 @@ describe('PostgreSQLDriver', () => {
       const args = mockSpawn.mock.calls[0]?.[1] as string[]
       expect(args).toContain('users')
       expect(args).not.toContain('public.users')
+    })
+
+    it('should preserve schema-qualified table names for cross-schema backups', async () => {
+      const mockSpawn = vi.fn()
+        .mockReturnValue({
+          stdout: { on: vi.fn().mockReturnThis(), pipe: vi.fn() },
+          stderr: { on: vi.fn() },
+          on: vi.fn().mockReturnThis(),
+          kill: vi.fn(),
+        /* eslint-disable @typescript-eslint/no-explicit-any */
+        } as any)
+
+      vi.doMock('node:child_process', async (importOriginal) => {
+        const actual = await importOriginal() as Record<string, unknown>
+        return {
+          ...actual,
+          spawn: mockSpawn,
+        }
+      })
+
+      await driver.dump({ database: 'testdb', tables: ['public.users', 'audit.logs'] })
+
+      const args = mockSpawn.mock.calls[0]?.[1] as string[]
+      expect(args).toContain('public.users')
+      expect(args).toContain('audit.logs')
     })
   })
 

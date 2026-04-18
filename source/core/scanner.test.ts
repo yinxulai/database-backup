@@ -202,6 +202,7 @@ destination:
       expect(result.valid).toBe(true)
       expect(result.errors).toHaveLength(0)
     })
+
   })
 
   describe('scan()', () => {

@@ -24,9 +24,7 @@ export interface BackupSource {
   connection: ConnectionConfig
   /** 数据库名称 */
   database: string
-  /** Schema（省略 = 所有 schema）*/
-  schema?: string
-  /** 要备份的表（省略或空数组 = 所有 table）*/
+  /** 要备份的表（支持 schema.table；省略或空数组 = 所有 table）*/
   tables?: string[]
 }
 
@@ -171,10 +169,8 @@ export type BackupStatus = 'pending' | 'running' | 'completed' | 'failed' | 'dry
  * Dump 选项
  */
 export interface DumpOptions {
-  /** 要备份的表（省略或空数组 = 所有 table）*/
+  /** 要备份的表（支持 schema.table；省略或空数组 = 所有 table）*/
   tables?: string[]
-  /** Schema（省略 = 所有 schema）*/
-  schema?: string
   /** 数据库名称 */
   database: string
   /** 压缩格式 */
@@ -240,10 +236,8 @@ export interface RestoreOptions {
   backupKey: string
   /** 目标数据库名称 */
   database: string
-  /** 要恢复的表（空 = 全部）*/
+  /** 要恢复的表（支持 schema.table；空 = 全部）*/
   tables?: string[]
-  /** Schema */
-  schema?: string
   /** 恢复前清理（drop existing objects）*/
   clean?: boolean
   /** 创建数据库（如果不存在）*/
@@ -307,10 +301,8 @@ export interface RestoreInput {
   backupKey: string
   /** 目标数据库名称 */
   database?: string
-  /** 要恢复的表 */
+  /** 要恢复的表（支持 schema.table）*/
   tables?: string[]
-  /** Schema */
-  schema?: string
   /** 恢复前清理 */
   clean?: boolean
   /** 创建数据库 */

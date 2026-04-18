@@ -29,12 +29,10 @@ source:
     password: ${DB_PASSWORD}
     ssl: false
   database: myapp
-  # 可选：指定 schema；省略 = 备份所有 schema
-  # schema: public
-  # 可选：指定表列表；省略或空数组 = 备份所有 table
-  # tables:
-  #   - users
-  #   - orders
+  # 可选：指定表列表；支持 Schema.TableName；省略或空数组 = 备份所有 table
+  tables:
+    - public.users
+    - audit.login_events
 
 # 目标配置
 destination:

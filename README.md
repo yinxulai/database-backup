@@ -90,8 +90,7 @@ source:
     username: postgres
     password: ${DB_PASSWORD}  # or write the plain password directly
   database: myapp
-  # schema: public          # Optional; omit to back up all schemas
-  # tables: [users, orders] # Optional; omit or use [] to back up all tables
+  tables: [public.users, audit.orders]    # Optional; supports Schema.TableName; omit or use [] for all tables
 destination:
   type: s3
   s3:
@@ -131,8 +130,7 @@ source:
     username: string
     password: string           # plain text or ${DB_PASSWORD}
   database: string
-  schema?: string
-  tables: ["*"]                # Empty = all tables
+  tables?: ["public.users"]    # Optional; supports Schema.TableName, omit or [] = all tables
 
 # Destination configuration
 destination:

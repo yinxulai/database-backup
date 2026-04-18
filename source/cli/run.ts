@@ -247,7 +247,7 @@ Options:
   --dry-run          Validate dump without uploading
   --backup-key <key>  Backup file key to restore (required for restore)
   -d, --database <db> Target database for restore (optional)
-  --tables <list>    Comma-separated table list for partial restore (optional)
+  --tables <list>    Comma-separated table list; supports Schema.TableName (optional)
   --clean            Drop existing objects before restore (optional)
   --create           Create target database if not exists (optional)
 
@@ -257,7 +257,7 @@ Examples:
   backup validate --config backup.yaml
   backup restore --config backup.yaml --backup-key postgresql-myapp-2026-04-18-10-30-00.sql.gz
   backup restore --config backup.yaml --backup-key postgresql-myapp-2026-04-18-10-30-00.sql.gz --database myapp_restore
-  backup restore --config backup.yaml --backup-key postgresql-myapp-2026-04-18-10-30-00.sql.gz --tables users,orders --clean
+  backup restore --config backup.yaml --backup-key postgresql-myapp-2026-04-18-10-30-00.sql.gz --tables public.users,audit.orders --clean
 
 For more information, see:
   https://github.com/taicode-labs/database-backup

@@ -82,8 +82,7 @@ source:
     username: string
     password: string           # 明文，或 ${DB_PASSWORD}
   database: string
-  schema?: string               # 可选；省略 = 备份所有 schema
-  tables?: ["users", "orders"] # 可选；省略或空数组 = 备份所有 table
+  tables?: ["public.users"]      # 可选；支持 Schema.TableName；省略或空数组 = 备份所有 table
 
 # 目标存储配置
 destination:

@@ -17,15 +17,14 @@ describe('Core Types', () => {
           database: 'testdb',
         },
         database: 'testdb',
-        schema: 'public',
-        tables: ['users', 'orders'],
+        tables: ['public.users', 'audit.orders'],
       }
 
       expect(source.type).toBe('postgresql')
       expect(source.tables).toHaveLength(2)
     })
 
-    it('should support optional schema', () => {
+    it('should support schema-qualified table names', () => {
       const source = {
         type: 'postgresql' as const,
         connection: {
@@ -36,9 +35,10 @@ describe('Core Types', () => {
           database: 'testdb',
         },
         database: 'testdb',
+        tables: ['public.users'],
       }
 
-      expect(source.schema).toBeUndefined()
+      expect(source.tables?.[0]).toBe('public.users')
     })
 
     it('should support empty tables for full backup', () => {

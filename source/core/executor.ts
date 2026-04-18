@@ -66,11 +66,12 @@ export class DefaultBackupExecutor implements BackupExecutor {
       startTime: new Date(),
     }
 
-    const { source, destination } = config.config
+    const effectiveConfig = this.prepareRuntimeConfig(config, result.startTime)
+    const { source, destination } = effectiveConfig.config
 
     // Create database and storage drivers
-    const dbDriver = this.options.databaseDriverFactory.create(config)
-    const storageDriver = this.options.storageDriverFactory.create(config)
+    const dbDriver = this.options.databaseDriverFactory.create(effectiveConfig)
+    const storageDriver = this.options.storageDriverFactory.create(effectiveConfig)
 
     try {
       // 1. Test connection
@@ -82,7 +83,7 @@ export class DefaultBackupExecutor implements BackupExecutor {
       log.info('Database connection successful')
 
       // 2. Generate file key
-      const fileKey = outputKey ?? this.generateFileKey(config)
+      const fileKey = outputKey ?? this.generateFileKey(effectiveConfig, result.startTime)
       result.fileKey = fileKey
       result.tables = source.tables ?? []
 
@@ -92,7 +93,6 @@ export class DefaultBackupExecutor implements BackupExecutor {
       const compression: 'gzip' | 'none' | undefined = destination.type === 's3' ? 'gzip' : undefined
       const dumpOptions = {
         database: source.database,
-        schema: source.schema,
         tables,
         compression,
       }
@@ -221,7 +221,6 @@ export class DefaultBackupExecutor implements BackupExecutor {
         backupKey: input.backupKey,
         database: targetDatabase,
         tables: input.tables,
-        schema: input.schema,
         clean: input.clean,
         create: input.create,
         compressed: input.backupKey.endsWith('.gz'),
@@ -283,27 +282,72 @@ export class DefaultBackupExecutor implements BackupExecutor {
   /**
    * Generate file key for backup
    */
-  private generateFileKey(config: ResolvedConfig): string {
-    const { source, destination } = config.config
-    const now = new Date()
+  private generateFileKey(config: ResolvedConfig, now = new Date()): string {
+    const { source } = config.config
     const date = now.toISOString().split('T')[0]
     const time = now.toTimeString().split(' ')[0].replace(/:/g, '-')
 
     let key = `${source.type}-${source.database}-${date}-${time}.sql`
 
-    if (destination.type === 's3' && destination.s3?.pathPrefix) {
-      let prefix = destination.s3.pathPrefix
-      prefix = prefix.replace('{{.Database}}', source.database)
-      prefix = prefix.replace('{{.Schema}}', source.schema ?? 'all-schemas')
-      prefix = prefix.replace('{{.Date}}', date)
-      prefix = prefix.replace('{{.Time}}', time)
-      prefix = prefix.replace('{{.Type}}', source.type)
-      key = `${prefix}/${key}`
+    if (config.s3?.pathPrefix) {
+      key = `${config.s3.pathPrefix}/${key}`
     }
 
     key += '.gz'
 
     return key
+  }
+
+  /**
+   * Render runtime-only S3 template variables once so uploads and generated keys stay consistent.
+   */
+  private prepareRuntimeConfig(config: ResolvedConfig, now = new Date()): ResolvedConfig {
+    if (!config.s3?.pathPrefix) {
+      return config
+    }
+
+    const date = now.toISOString().split('T')[0]
+    const time = now.toTimeString().split(' ')[0].replace(/:/g, '-')
+    const { source } = config.config
+
+    const renderedPathPrefix = config.s3.pathPrefix
+      .replaceAll('{{.Database}}', source.database)
+      .replaceAll('{{.Schema}}', this.resolveSchemaPlaceholder(source.tables))
+      .replaceAll('{{.Date}}', date)
+      .replaceAll('{{.Time}}', time)
+      .replaceAll('{{.Type}}', source.type)
+
+    return {
+      ...config,
+      s3: {
+        ...config.s3,
+        pathPrefix: renderedPathPrefix,
+      },
+    }
+  }
+
+  /**
+   * Resolve a schema label for optional pathPrefix templating.
+   */
+  private resolveSchemaPlaceholder(tables?: string[]): string {
+    if (!tables || tables.length === 0) {
+      return 'all-schemas'
+    }
+
+    const schemas = new Set<string>()
+
+    for (const table of tables) {
+      const normalized = table.trim()
+      const separatorIndex = normalized.indexOf('.')
+
+      if (separatorIndex <= 0) {
+        return 'mixed-schemas'
+      }
+
+      schemas.add(normalized.slice(0, separatorIndex))
+    }
+
+    return schemas.size === 1 ? [...schemas][0]! : 'mixed-schemas'
   }
 
   /**

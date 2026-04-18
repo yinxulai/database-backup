@@ -180,15 +180,10 @@ export class PostgreSQLDriver implements DatabaseDriver {
       args.push('--clean')
     }
 
-    // Schema
-    if (options.schema) {
-      args.push('-n', options.schema)
-    }
-
     // 表过滤
     if (options.tables && options.tables.length > 0) {
       for (const table of options.tables) {
-        args.push('-t', this.buildTableFilter(table, options.schema))
+        args.push('-t', this.buildTableFilter(table))
       }
     }
 
@@ -260,15 +255,10 @@ export class PostgreSQLDriver implements DatabaseDriver {
       args.push('--ssl-mode=require')
     }
 
-    // Schema
-    if (options.schema) {
-      args.push('-n', options.schema)
-    }
-
     // 表
     if (options.tables && options.tables.length > 0) {
       for (const table of options.tables) {
-        args.push('-t', this.buildTableFilter(table, options.schema))
+        args.push('-t', this.buildTableFilter(table))
       }
     }
 
@@ -282,16 +272,10 @@ export class PostgreSQLDriver implements DatabaseDriver {
 
   /**
    * Build table filter argument.
-   * - If the table is already qualified as schema.table, keep it as-is.
-   * - If a schema is provided, qualify the table with that schema.
-   * - If no schema is provided, leave the table unqualified so PostgreSQL can match it naturally.
+   * Supports either a plain table name or a schema-qualified name like public.users.
    */
-  private buildTableFilter(table: string, schema?: string): string {
-    if (table.includes('.')) {
-      return table
-    }
-
-    return schema ? `${schema}.${table}` : table
+  private buildTableFilter(table: string): string {
+    return table.trim()
   }
 
   /**
