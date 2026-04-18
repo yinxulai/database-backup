@@ -4,11 +4,11 @@
  * 使用 pg_dump 执行 PostgreSQL 数据库备份
  */
 
-import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { execFile } from 'node:child_process'
 import type { Readable, Writable } from 'node:stream'
-import type { DumpOptions, RestoreOptions, ResolvedConnection } from '@core/types'
 import type { DatabaseDriver } from '@core/interfaces'
+import type { DumpOptions, RestoreOptions, ResolvedConnection } from '@core/types'
 
 const execFileAsync = promisify(execFile)
 

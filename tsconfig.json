@@ -3,28 +3,42 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "allowJs": true,
-    "allowImportingTsExtensions": true,
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "paths": {
-      "@core/*": ["./source/core/*"],
-      "@adapters/*": ["./source/adapters/*"],
-      "@health/*": ["./source/health/*"],
-      "@retention/*": ["./source/retention/*"]
+      "@core/*": [
+        "./source/core/*"
+      ],
+      "@health/*": [
+        "./source/health/*"
+      ],
+      "@adapters/*": [
+        "./source/adapters/*"
+      ],
+      "@retention/*": [
+        "./source/retention/*"
+      ]
     },
     "outDir": "./output",
     "rootDir": "./source",
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
     "strict": true,
-    "esModuleInterop": true,
+    "sourceMap": true,
+    "declaration": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
+    "declarationMap": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
     "noUncheckedIndexedAccess": false,
     "exactOptionalPropertyTypes": false,
-    "isolatedModules": true
+    "forceConsistentCasingInFileNames": true
   },
-  "include": ["source/**/*"],
-  "exclude": ["node_modules", "output", "sea", "out", "**/*.test.ts"]
+  "include": [
+    "source/**/*"
+  ],
+  "exclude": [
+    "output",
+    "node_modules",
+    "**/*.test.ts"
+  ]
 }
