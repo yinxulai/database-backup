@@ -1,23 +1,54 @@
 {
-  "name": "database-backup",
-  "version": "1.0.0",
-  "description": "",
-  "homepage": "https://github.com/yinxulai/database-backup#readme",
-  "bugs": {
-    "url": "https://github.com/yinxulai/database-backup/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/yinxulai/database-backup.git"
-  },
-  "license": "ISC",
-  "author": "",
+  "name": "@taicode/backup",
+  "version": "0.1.0",
+  "description": "Multi-mode database backup tool with CI-first architecture",
   "type": "module",
-  "main": "index.js",
+  "main": "./output/index.js",
+  "bin": {
+    "backup": "./output/cli/run.js"
+  },
+  "exports": {
+    ".": "./output/index.js",
+    "./cli": "./output/cli/index.js"
+  },
+  "files": [
+    "output/"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "typecheck": "tsc --noEmit",
+    "build:dev": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json",
+    "build:sea": "node scripts/build-sea.mjs",
+    "prepack": "pnpm build",
+    "test": "vitest",
+    "test:e2e": "vitest run tests/e2e",
+    "clean": "rm -rf output sea out",
+    "lint": "eslint source --ext .ts"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   },
   "dependencies": {
-    "typescript": "^6.0.3"
+    "@aws-sdk/client-s3": "^3.0.0",
+    "yaml": "^2.0.0",
+    "cron-parser": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^2.0.0"
+  },
+  "keywords": [
+    "database",
+    "backup",
+    "postgresql",
+    "mysql",
+    "s3",
+    "cli"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/taicode-labs/database-backup.git"
   }
 }

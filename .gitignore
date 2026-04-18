@@ -1,45 +1,29 @@
-# Compiled Object files, Static and Dynamic libs (Shared Objects)
-*.o
-*.a
-*.so
+# Dependencies
+node_modules/
 
-# Folders
-_obj
-_test
+# Build outputs
+output/
+sea/
+out/
 
-# Architecture specific extensions/prefixes
-*.[568vq]
-[568vq].out
+# Logs
+*.log
+npm-debug.log*
 
-*.cgo1.go
-*.cgo2.c
-_cgo_defun.c
-_cgo_gotypes.go
-_cgo_export.*
-
-_testmain.go
-
-*.exe
-*.test
-*.prof
-
-# Build result
-esm
-lib
-
-# Node.js relative files
-node_modules
-npm-debug.log
-yarn-error.log
-
-# VS Code
-.vscode
-
-# jetbrains IDE
-.idea
-
-# Test Relative Folders
-# __mocks__
-__coverage__
-
+# OS files
 .DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Test coverage
+coverage/

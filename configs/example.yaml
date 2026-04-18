@@ -1,0 +1,59 @@
+# Database Backup 配置示例
+#
+# 使用方法:
+#   backup run --config configs/example.yaml
+#
+# 环境变量:
+#   DB_PASSWORD=xxx
+#   AWS_ACCESS_KEY_ID=xxx
+#   AWS_SECRET_ACCESS_KEY=xxx
+
+apiVersion: backup.taicode/v1
+kind: BackupGroup
+metadata:
+  name: example-postgres-backup
+  labels:
+    app: example
+spec:
+  # 来源配置
+  source:
+    type: postgresql
+    connection:
+      host: localhost
+      port: 5432
+      username: postgres
+      # 使用环境变量
+      passwordSecretRef:
+        type: env
+        envVar: DB_PASSWORD
+      ssl: false
+    database: myapp
+    schema: public
+    # 要备份的表（空数组或省略 = 全库）
+    tables: []
+
+  # 目标配置
+  destination:
+    type: s3
+    s3:
+      endpoint: https://s3.amazonaws.com
+      region: us-east-1
+      bucket: my-backups
+      accessKeySecretRef:
+        type: env
+        envVar: AWS_ACCESS_KEY_ID
+      secretKeySecretRef:
+        type: env
+        envVar: AWS_SECRET_ACCESS_KEY
+      # 路径模板
+      pathPrefix: "{{.Database}}/{{.Date}}"
+
+  # 调度配置（可选，不填 = 手动执行）
+  # schedule:
+  #   enabled: true
+  #   cron: "0 2 * * *"
+  #   timezone: "Asia/Shanghai"
+
+  # 保留策略（可选）
+  # retention:
+  #   retentionDays: 7
