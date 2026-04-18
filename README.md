@@ -90,7 +90,8 @@ source:
     username: postgres
     password: ${DB_PASSWORD}  # or write the plain password directly
   database: myapp
-  tables: ["*"]  # Empty or omitted = all tables
+  # schema: public          # Optional; omit to back up all schemas
+  # tables: [users, orders] # Optional; omit or use [] to back up all tables
 destination:
   type: s3
   s3:

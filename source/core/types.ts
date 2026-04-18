@@ -24,9 +24,9 @@ export interface BackupSource {
   connection: ConnectionConfig
   /** 数据库名称 */
   database: string
-  /** Schema（默认 public）*/
+  /** Schema（省略 = 所有 schema）*/
   schema?: string
-  /** 要备份的表（空 = 全库）*/
+  /** 要备份的表（省略或空数组 = 所有 table）*/
   tables?: string[]
 }
 
@@ -171,9 +171,9 @@ export type BackupStatus = 'pending' | 'running' | 'completed' | 'failed' | 'dry
  * Dump 选项
  */
 export interface DumpOptions {
-  /** 要备份的表（空数组 = 全库）*/
-  tables: string[]
-  /** Schema */
+  /** 要备份的表（省略或空数组 = 所有 table）*/
+  tables?: string[]
+  /** Schema（省略 = 所有 schema）*/
   schema?: string
   /** 数据库名称 */
   database: string

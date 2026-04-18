@@ -294,7 +294,7 @@ export class DefaultBackupExecutor implements BackupExecutor {
     if (destination.type === 's3' && destination.s3?.pathPrefix) {
       let prefix = destination.s3.pathPrefix
       prefix = prefix.replace('{{.Database}}', source.database)
-      prefix = prefix.replace('{{.Schema}}', source.schema ?? 'public')
+      prefix = prefix.replace('{{.Schema}}', source.schema ?? 'all-schemas')
       prefix = prefix.replace('{{.Date}}', date)
       prefix = prefix.replace('{{.Time}}', time)
       prefix = prefix.replace('{{.Type}}', source.type)

@@ -29,9 +29,12 @@ source:
     password: ${DB_PASSWORD}
     ssl: false
   database: myapp
-  schema: public
-  # 要备份的表（空数组或省略 = 全库）
-  tables: []
+  # 可选：指定 schema；省略 = 备份所有 schema
+  # schema: public
+  # 可选：指定表列表；省略或空数组 = 备份所有 table
+  # tables:
+  #   - users
+  #   - orders
 
 # 目标配置
 destination:

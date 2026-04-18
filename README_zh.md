@@ -82,8 +82,8 @@ source:
     username: string
     password: string           # 明文，或 ${DB_PASSWORD}
   database: string
-  schema?: string
-  tables: ["*"]                # 空 = 全库
+  schema?: string               # 可选；省略 = 备份所有 schema
+  tables?: ["users", "orders"] # 可选；省略或空数组 = 备份所有 table
 
 # 目标存储配置
 destination:

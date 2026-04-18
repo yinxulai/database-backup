@@ -188,12 +188,7 @@ export class PostgreSQLDriver implements DatabaseDriver {
     // 表过滤
     if (options.tables && options.tables.length > 0) {
       for (const table of options.tables) {
-        const parts = table.split('.')
-        if (parts.length === 2) {
-          args.push('-t', `${parts[0]}.${parts[1]}`)
-        } else {
-          args.push('-t', `${options.schema || 'public'}.${table}`)
-        }
+        args.push('-t', this.buildTableFilter(table, options.schema))
       }
     }
 
@@ -273,13 +268,7 @@ export class PostgreSQLDriver implements DatabaseDriver {
     // 表
     if (options.tables && options.tables.length > 0) {
       for (const table of options.tables) {
-        // 支持 schema.table 格式
-        const parts = table.split('.')
-        if (parts.length === 2) {
-          args.push('-t', `${parts[0]}.${parts[1]}`)
-        } else {
-          args.push('-t', `${options.schema || 'public'}.${table}`)
-        }
+        args.push('-t', this.buildTableFilter(table, options.schema))
       }
     }
 
@@ -289,6 +278,20 @@ export class PostgreSQLDriver implements DatabaseDriver {
     // args.push('-Fc')
 
     return args
+  }
+
+  /**
+   * Build table filter argument.
+   * - If the table is already qualified as schema.table, keep it as-is.
+   * - If a schema is provided, qualify the table with that schema.
+   * - If no schema is provided, leave the table unqualified so PostgreSQL can match it naturally.
+   */
+  private buildTableFilter(table: string, schema?: string): string {
+    if (table.includes('.')) {
+      return table
+    }
+
+    return schema ? `${schema}.${table}` : table
   }
 
   /**
