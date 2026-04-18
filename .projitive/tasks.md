@@ -9,7 +9,7 @@ This file is generated from .projitive governance store by Projitive MCP. Manual
 ## TASK-0006 | DONE | 实现 Prometheus Metrics 上报
 - owner: (none)
 - summary: 实现 Prometheus 指标上报，支持备份成功/失败/耗时/大小等指标
-- updatedAt: 2026-04-18T06:17:15.496Z
+- updatedAt: 2026-04-18T06:21:45.938Z
 - roadmapRefs: (none)
 - links:
   - (none)

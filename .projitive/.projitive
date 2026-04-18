@@ -74,10 +74,10 @@
       "status": "DONE",
       "owner": "",
       "summary": "实现 Prometheus 指标上报，支持备份成功/失败/耗时/大小等指标",
-      "updatedAt": "2026-04-18T06:17:15.496Z",
+      "updatedAt": "2026-04-18T06:21:45.938Z",
       "links": [],
       "roadmapRefs": [],
-      "recordVersion": 3
+      "recordVersion": 4
     },
     {
       "id": "TASK-0007",
@@ -124,7 +124,7 @@
     }
   ],
   "meta": {
-    "tasks_version": 21,
+    "tasks_version": 22,
     "roadmaps_version": 1,
     "store_schema_version": 3
   },
@@ -132,9 +132,9 @@
     "tasks_markdown": {
       "name": "tasks_markdown",
       "dirty": false,
-      "lastSourceVersion": 21,
-      "lastBuiltAt": "2026-04-18T06:17:15.501Z",
-      "recordVersion": 63
+      "lastSourceVersion": 22,
+      "lastBuiltAt": "2026-04-18T06:21:45.949Z",
+      "recordVersion": 66
     },
     "roadmaps_markdown": {
       "name": "roadmaps_markdown",
