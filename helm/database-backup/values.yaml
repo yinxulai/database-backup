@@ -31,7 +31,7 @@ ttlSecondsAfterFinished: ""
 # Backup configuration (YAML content)
 config:
   content: |
-    # apiVersion: backup.taicode/v1
+    # apiVersion: database-backup.yinxulai/v1
     # kind: BackupGroup
     # metadata:
     #   name: my-backup
