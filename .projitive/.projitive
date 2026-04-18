@@ -93,24 +93,24 @@
     {
       "id": "TASK-0008",
       "title": "实现健康检查接口",
-      "status": "TODO",
+      "status": "IN_PROGRESS",
       "owner": "",
       "summary": "实现 /health 端点，支持 liveness 和 readiness probe",
-      "updatedAt": "2026-04-18T04:35:38.509Z",
+      "updatedAt": "2026-04-18T04:51:22.272Z",
       "links": [],
       "roadmapRefs": [],
-      "recordVersion": 1
+      "recordVersion": 2
     },
     {
       "id": "TASK-0009",
       "title": "实现备份保留策略",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "",
       "summary": "实现基于时间和数量的备份保留策略，自动清理过期备份",
-      "updatedAt": "2026-04-18T04:47:25.275Z",
+      "updatedAt": "2026-04-18T04:50:36.943Z",
       "links": [],
       "roadmapRefs": [],
-      "recordVersion": 2
+      "recordVersion": 3
     }
   ],
   "roadmaps": [
@@ -124,7 +124,7 @@
     }
   ],
   "meta": {
-    "tasks_version": 14,
+    "tasks_version": 16,
     "roadmaps_version": 1,
     "store_schema_version": 3
   },
@@ -132,9 +132,9 @@
     "tasks_markdown": {
       "name": "tasks_markdown",
       "dirty": false,
-      "lastSourceVersion": 14,
-      "lastBuiltAt": "2026-04-18T04:47:25.280Z",
-      "recordVersion": 42
+      "lastSourceVersion": 16,
+      "lastBuiltAt": "2026-04-18T04:51:22.278Z",
+      "recordVersion": 48
     },
     "roadmaps_markdown": {
       "name": "roadmaps_markdown",

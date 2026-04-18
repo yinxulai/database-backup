@@ -13,13 +13,14 @@ import { createPostgreSQLDriver } from '../adapters/database/postgresql.js'
 import { createS3StorageDriver } from '../adapters/storage/s3.js'
 import { createBackupExecutor } from '../core/executor.js'
 import { createRetentionExecutor } from '../retention/executor.js'
+import { createHealthServer } from '../health/server.js'
 import type { SecretResolver, DatabaseDriver, StorageDriver } from '../core/interfaces.js'
 import type { ResolvedConfig, BackupGroup, SecretRef } from '../core/types.js'
 
 /**
  * CLI 命令类型
  */
-type Command = 'run' | 'validate' | 'retention' | 'version' | 'help'
+type Command = 'run' | 'validate' | 'retention' | 'serve' | 'version' | 'help'
 
 /**
  * CLI 选项
@@ -28,6 +29,7 @@ interface CliOptions {
   command: Command
   config?: string
   output: 'text' | 'json'
+  port?: number
 }
 
 /**
@@ -45,6 +47,9 @@ export async function runCli(args: string[]): Promise<void> {
       break
     case 'retention':
       await retentionCommand(options, args)
+      break
+    case 'serve':
+      await serveCommand(options)
       break
     case 'version':
       versionCommand()
@@ -67,6 +72,7 @@ function parseCliArgs(args: string[]): CliOptions {
       output: { type: 'string', short: 'o', default: 'text' },
       help: { type: 'boolean', short: 'h', default: false },
       version: { type: 'boolean', short: 'v', default: false },
+      port: { type: 'string', short: 'p' },
     },
     allowPositionals: true,
   })
@@ -83,6 +89,7 @@ function parseCliArgs(args: string[]): CliOptions {
     command,
     config: values.config ?? undefined,
     output: values.output as 'text' | 'json',
+    port: values.port ? parseInt(values.port as string, 10) : undefined,
   }
 }
 
@@ -221,6 +228,69 @@ async function retentionCommand(options: CliOptions, args: string[]): Promise<vo
 }
 
 /**
+ * serve 命令 - 启动健康检查 HTTP 服务器
+ */
+async function serveCommand(options: CliOptions): Promise<void> {
+  if (!options.config) {
+    console.error('Error: --config is required')
+    console.error('Usage: backup serve --config <file> [--port 8080]')
+    process.exit(1)
+  }
+
+  const configPath = resolve(options.config)
+  const port = options.port ?? 8080
+
+  console.log(`[health] Loading config from: ${configPath}`)
+
+  try {
+    // 1. 扫描配置
+    const scanner = createConfigScanner()
+    const groups = await scanner.scan(configPath)
+
+    if (groups.length === 0) {
+      console.error('Error: No BackupGroup found in config')
+      process.exit(1)
+    }
+
+    // 2. 解析配置（加载 Secret）
+    const secretResolver = createEnvSecretResolver()
+    const resolvedConfigs = await Promise.all(
+      groups.map((group) => resolveConfig(group, secretResolver))
+    )
+
+    // 3. 创建数据库驱动（用于 readiness 检查）
+    const databaseDrivers = resolvedConfigs.map((config) => createDatabaseDriver(config))
+
+    // 4. 启动健康检查服务器
+    const server = createHealthServer({
+      port,
+      databaseDrivers,
+    })
+
+    server.listen(port, () => {
+      console.log(`[health] Server listening on port ${port}`)
+      console.log(`[health] Liveness:  GET /health/live`)
+      console.log(`[health] Readiness: GET /health/ready`)
+    })
+
+    // Graceful shutdown
+    const shutdown = () => {
+      console.log('[health] Shutting down...')
+      server.close(() => {
+        console.log('[health] Server closed')
+        process.exit(0)
+      })
+    }
+    process.on('SIGTERM', shutdown)
+    process.on('SIGINT', shutdown)
+
+  } catch (err) {
+    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`)
+    process.exit(1)
+  }
+}
+
+/**
  * version 命令
  */
 function versionCommand(): void {
@@ -241,18 +311,21 @@ Usage:
 Commands:
   run          Execute backup
   retention    Apply retention policy
+  serve        Start health check HTTP server
   validate     Validate config file
   version      Show version
   help         Show this help
 
 Options:
-  -c, --config <file>   Config file path (required for run/retention/validate)
+  -c, --config <file>   Config file path (required for run/retention/serve/validate)
   -o, --output <format> Output format: text (default) or json
+  -p, --port <port>    HTTP server port (default: 8080)
 
 Examples:
   backup run --config backup.yaml
   backup retention --config backup.yaml
   backup retention --config backup.yaml --dry-run
+  backup serve --config backup.yaml --port 8080
   backup validate --config backup.yaml
   backup run --config backup.yaml --output json
 
