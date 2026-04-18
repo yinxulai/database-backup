@@ -257,3 +257,88 @@ export interface ResolvedS3Config {
   pathPrefix?: string
   forcePathStyle: boolean
 }
+
+/**
+ * 恢复选项
+ */
+export interface RestoreOptions {
+  /** 备份文件 key（存储中的路径）*/
+  backupKey: string
+  /** 目标数据库名称 */
+  database: string
+  /** 要恢复的表（空 = 全部）*/
+  tables?: string[]
+  /** Schema */
+  schema?: string
+  /** 恢复前清理（drop existing objects）*/
+  clean?: boolean
+  /** 创建数据库（如果不存在）*/
+  create?: boolean
+  /** 备份是否为 gzip 压缩 */
+  compressed?: boolean
+  /** 备份格式: 'plain' (pg_dump plain SQL) | 'custom' (pg_dump -Fc) */
+  format?: 'plain' | 'custom'
+}
+
+/**
+ * 恢复结果
+ */
+export interface RestoreResult {
+  /** 结果 ID */
+  id: string
+  /** 任务名称 */
+  taskName: string
+  /** 状态 */
+  status: RestoreStatus
+  /** 开始时间 */
+  startTime: Date
+  /** 结束时间 */
+  endTime?: Date
+  /** 耗时（秒）*/
+  duration?: number
+  /** 恢复的文件 key */
+  fileKey?: string
+  /** 错误信息 */
+  error?: string
+}
+
+/**
+ * 恢复状态
+ */
+export type RestoreStatus = 'pending' | 'running' | 'completed' | 'failed'
+
+/**
+ * 备份对象（从存储中列出）
+ */
+export interface BackupObject {
+  /** 存储 key */
+  key: string
+  /** 文件大小 */
+  size: number
+  /** 最后修改时间 */
+  lastModified: Date
+  /** 数据库类型 */
+  databaseType?: string
+  /** 数据库名称 */
+  databaseName?: string
+  /** 备份时间 */
+  backupTime?: Date
+}
+
+/**
+ * Restore options input (before backup key is resolved)
+ */
+export interface RestoreInput {
+  /** 要恢复的备份 key */
+  backupKey: string
+  /** 目标数据库名称 */
+  database?: string
+  /** 要恢复的表 */
+  tables?: string[]
+  /** Schema */
+  schema?: string
+  /** 恢复前清理 */
+  clean?: boolean
+  /** 创建数据库 */
+  create?: boolean
+}

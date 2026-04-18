@@ -5,6 +5,8 @@ import type { Readable } from 'node:stream'
 import type {
   ResolvedConfig,
   BackupResult,
+  RestoreInput,
+  RestoreResult,
 } from './types.js'
 import type {
   SecretResolver,
@@ -166,6 +168,119 @@ export class DefaultBackupExecutor implements BackupExecutor {
 
     } finally {
       await dbDriver.close()
+    }
+  }
+
+  /**
+   * Execute restore
+   */
+  async restore(config: ResolvedConfig, input: RestoreInput): Promise<RestoreResult> {
+    const requestId = randomUUID()
+    const log = this.logger.child(requestId)
+
+    const result: RestoreResult = {
+      id: randomUUID(),
+      taskName: input.backupKey,
+      status: 'running',
+      startTime: new Date(),
+      fileKey: input.backupKey,
+    }
+
+    // Create database and storage drivers
+    const dbDriver = this.options.databaseDriverFactory.create(config)
+    const storageDriver = this.options.storageDriverFactory.create(config)
+
+    try {
+      // 1. Determine the target database and format from backup key
+      const backupInfo = this.parseBackupKey(input.backupKey)
+      const targetDatabase = input.database ?? backupInfo.database ?? config.connection.database
+
+      log.info('Starting restore', {
+        backupKey: input.backupKey,
+        targetDatabase,
+        compressed: input.backupKey.endsWith('.gz'),
+      })
+
+      // 2. Download backup from storage
+      log.info('Downloading backup from storage')
+      const backupStream = await storageDriver.download(input.backupKey)
+
+      // 3. Decompress if gzip
+      let restoreStream: Readable = backupStream
+      if (input.backupKey.endsWith('.gz')) {
+        log.info('Decompressing backup')
+        const { spawn: spawnGzip } = await import('node:child_process')
+        const gunzip = spawnGzip('gunzip', ['-c'], { stdio: ['pipe', 'pipe', 'pipe'] })
+        backupStream.pipe(gunzip.stdin)
+        gunzip.stderr.on('data', (data) => {
+          console.error(`[gunzip] ${data.toString().trim()}`)
+        })
+        restoreStream = gunzip.stdout
+      }
+
+      // 4. Restore to database
+      log.info('Restoring database', { database: targetDatabase })
+
+      const restoreOptions = {
+        backupKey: input.backupKey,
+        database: targetDatabase,
+        tables: input.tables,
+        schema: input.schema,
+        clean: input.clean,
+        create: input.create,
+        compressed: input.backupKey.endsWith('.gz'),
+        format: (input.backupKey.includes('.sql.gz') ? 'plain' : 'custom') as 'plain' | 'custom',
+      }
+
+      const restoreInput = await dbDriver.restore(restoreOptions)
+      restoreStream.pipe(restoreInput)
+
+      // Wait for restore to complete
+      await new Promise<void>((resolve, reject) => {
+        restoreInput.on('finish', resolve)
+        restoreInput.on('error', reject)
+        restoreStream.on('error', reject)
+      })
+
+      result.status = 'completed'
+      result.endTime = new Date()
+      result.duration = Math.round((result.endTime.getTime() - result.startTime.getTime()) / 1000)
+
+      log.info('Restore completed', {
+        backupKey: input.backupKey,
+        duration: result.duration
+      })
+
+      return result
+
+    } catch (err) {
+      result.status = 'failed'
+      result.endTime = new Date()
+      result.duration = Math.round((result.endTime.getTime() - result.startTime.getTime()) / 1000)
+      result.error = err instanceof Error ? err.message : String(err)
+
+      log.error('Restore failed', { error: result.error })
+
+      return result
+
+    } finally {
+      await dbDriver.close()
+    }
+  }
+
+  /**
+   * Parse backup key to extract metadata
+   */
+  private parseBackupKey(key: string): { database?: string; type?: string } {
+    // Key format: {type}-{database}-{date}-{time}.sql[.gz]
+    // Example: postgresql-myapp-2026-04-18-10-30-00.sql.gz
+    const basename = key.split('/').pop() ?? key
+    const withoutExt = basename.replace(/\.(sql\.gz|sql)$/, '')
+    const parts = withoutExt.split('-')
+
+    return {
+      type: parts[0],
+      database: parts[1],
     }
   }
 

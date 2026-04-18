@@ -6,9 +6,9 @@
 
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { Readable } from 'node:stream'
-import type { Readable as NodeReadable } from 'node:stream'
-import type { DumpOptions, ResolvedConnection } from '@core/types'
+import { Readable, Writable } from 'node:stream'
+import type { Readable as NodeReadable, Writable as NodeWritable } from 'node:stream'
+import type { DumpOptions, RestoreOptions, ResolvedConnection } from '@core/types'
 import type { DatabaseDriver } from '@core/interfaces'
 
 const execFileAsync = promisify(execFile)
@@ -86,10 +86,155 @@ export class PostgreSQLDriver implements DatabaseDriver {
   }
 
   /**
-   * 关闭连接（pg_dump 是无状态的不需要关闭）
+   * 执行数据库恢复
+   * 支持 pg_restore（自定义格式）和 psql（plain SQL）
+   */
+  async restore(options: RestoreOptions): Promise<Writable> {
+    const { spawn } = await import('node:child_process')
+
+    // 根据格式选择恢复工具
+    const format = options.format ?? 'plain'
+
+    if (format === 'custom') {
+      // 使用 pg_restore 恢复自定义格式
+      return this.restoreWithPgRestore(options, spawn)
+    } else {
+      // 使用 psql 恢复 plain SQL
+      return this.restoreWithPsql(options, spawn)
+    }
+  }
+
+  /**
+   * 使用 pg_restore 恢复自定义格式备份
+   */
+  private async restoreWithPgRestore(
+    options: RestoreOptions,
+    spawn: typeof import('node:child_process').spawn
+  ): Promise<Writable> {
+    const args = this.buildPgRestoreArgs(options)
+    const env = this.createEnv()
+
+    const pgRestore = spawn('pg_restore', args, {
+      env,
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
+
+    pgRestore.stderr.on('data', (data) => {
+      console.error(`[pg_restore] ${data.toString().trim()}`)
+    })
+
+    return pgRestore.stdin!
+  }
+
+  /**
+   * 使用 psql 恢复 plain SQL 备份
+   */
+  private async restoreWithPsql(
+    options: RestoreOptions,
+    spawn: typeof import('node:child_process').spawn
+  ): Promise<Writable> {
+    const args = this.buildPsqlArgs(options)
+    const env = this.createEnv()
+
+    const psql = spawn('psql', args, {
+      env,
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
+
+    psql.stderr.on('data', (data) => {
+      console.error(`[psql] ${data.toString().trim()}`)
+    })
+
+    return psql.stdin!
+  }
+
+  /**
+   * 构建 pg_restore 参数
+   */
+  private buildPgRestoreArgs(options: RestoreOptions): string[] {
+    const args: string[] = []
+
+    // 连接参数
+    args.push('-h', this.connection.host)
+    args.push('-p', String(this.connection.port))
+    args.push('-U', this.connection.username)
+
+    // 创建数据库
+    if (options.create) {
+      args.push('--create')
+    }
+
+    // 清理选项
+    if (options.clean) {
+      args.push('--clean')
+    }
+
+    // Schema
+    if (options.schema) {
+      args.push('-n', options.schema)
+    }
+
+    // 表过滤
+    if (options.tables && options.tables.length > 0) {
+      for (const table of options.tables) {
+        const parts = table.split('.')
+        if (parts.length === 2) {
+          args.push('-t', `${parts[0]}.${parts[1]}`)
+        } else {
+          args.push('-t', `${options.schema || 'public'}.${table}`)
+        }
+      }
+    }
+
+    // 目标数据库
+    if (!options.create) {
+      args.push('-d', options.database)
+    }
+
+    // 输出到 stdin
+    args.push('-f', '-')
+
+    // 禁用提示（恢复时不需要）
+    args.push('--quiet')
+
+    return args
+  }
+
+  /**
+   * 构建 psql 参数
+   */
+  private buildPsqlArgs(options: RestoreOptions): string[] {
+    const args: string[] = []
+
+    // 连接参数
+    args.push('-h', this.connection.host)
+    args.push('-p', String(this.connection.port))
+    args.push('-U', this.connection.username)
+
+    // 创建数据库
+    if (options.create) {
+      args.push('--create')
+    }
+
+    // 目标数据库
+    if (!options.create) {
+      args.push('-d', options.database)
+    }
+
+    // 从 stdin 读取
+    args.push('-f', '-')
+
+    // 错误继续（部分失败不中断）
+    args.push('--set', 'ON_ERROR_STOP=off')
+
+    return args
+  }
+
+  /**
+   * 关闭连接（pg_dump/pg_restore/psql 是无状态的不需要关闭）
    */
   async close(): Promise<void> {
-    // pg_dump 是无状态命令，无需清理
+    // pg_dump/pg_restore/psql 是无状态命令，无需清理
   }
 
   /**

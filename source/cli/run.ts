@@ -9,17 +9,22 @@ import { createS3StorageDriver } from '@adapters/storage/s3'
 import { createBackupExecutor } from '@core/executor'
 import { createLogger } from '@core/logger'
 import type { SecretResolver, DatabaseDriver, StorageDriver } from '@core/interfaces'
-import type { ResolvedConfig, BackupGroup } from '@core/types'
+import type { ResolvedConfig, BackupGroup, RestoreInput } from '@core/types'
 
 const logger = createLogger()
 
-type Command = 'run' | 'validate' | 'version' | 'help'
+type Command = 'run' | 'validate' | 'restore' | 'version' | 'help'
 
 interface CliOptions {
   command: Command
   config?: string
   output: 'text' | 'json'
   dryRun?: boolean
+  backupKey?: string
+  database?: string
+  tables?: string[]
+  clean?: boolean
+  create?: boolean
 }
 
 export async function runCli(args: string[]): Promise<void> {
@@ -31,6 +36,9 @@ export async function runCli(args: string[]): Promise<void> {
       break
     case 'validate':
       await validateCommand(options)
+      break
+    case 'restore':
+      await restoreCommand(options)
       break
     case 'version':
       versionCommand()
@@ -51,6 +59,11 @@ function parseCliArgs(args: string[]): CliOptions {
       help: { type: 'boolean', short: 'h', default: false },
       version: { type: 'boolean', short: 'v', default: false },
       'dry-run': { type: 'boolean', default: false },
+      'backup-key': { type: 'string' },
+      database: { type: 'string', short: 'd' },
+      tables: { type: 'string' },
+      clean: { type: 'boolean', default: false },
+      create: { type: 'boolean', default: false },
     },
     allowPositionals: true,
   })
@@ -66,6 +79,11 @@ function parseCliArgs(args: string[]): CliOptions {
     config: values.config ?? undefined,
     output: values.output as 'text' | 'json',
     dryRun: (values['dry-run'] as boolean) ?? false,
+    backupKey: values['backup-key'] as string | undefined,
+    database: values.database as string | undefined,
+    tables: values.tables ? (values.tables as string).split(',') : undefined,
+    clean: values.clean as boolean | undefined,
+    create: values.create as boolean | undefined,
   }
 }
 
@@ -142,6 +160,72 @@ async function validateCommand(options: CliOptions): Promise<void> {
   }
 }
 
+async function restoreCommand(options: CliOptions): Promise<void> {
+  if (!options.config) {
+    console.error('Error: --config is required')
+    console.error('Usage: backup restore --config <file> --backup-key <key>')
+    process.exit(1)
+  }
+
+  if (!options.backupKey) {
+    console.error('Error: --backup-key is required')
+    console.error('Usage: backup restore --config <file> --backup-key <key>')
+    process.exit(1)
+  }
+
+  const configPath = resolve(options.config)
+  logger.info('Loading config', { path: configPath })
+
+  try {
+    const scanner = createConfigScanner()
+    const groups = await scanner.scan(configPath)
+
+    if (groups.length === 0) {
+      logger.error('No BackupGroup found in config')
+      process.exit(1)
+    }
+
+    const secretResolver = createEnvSecretResolver()
+    const resolvedConfigs = await Promise.all(
+      groups.map((group) => resolveConfig(group, secretResolver))
+    )
+
+    for (const config of resolvedConfigs) {
+      const executor = createBackupExecutor({
+        secretResolver,
+        databaseDriverFactory: { create: createDatabaseDriver },
+        storageDriverFactory: { create: createStorageDriver },
+      })
+
+      const restoreInput: RestoreInput = {
+        backupKey: options.backupKey,
+        database: options.database,
+        tables: options.tables,
+        clean: options.clean,
+        create: options.create,
+      }
+
+      const result = await executor.restore(config, restoreInput)
+
+      if (options.output === 'json') {
+        console.log(JSON.stringify(result, null, 2))
+      } else {
+        if (result.status === 'completed') {
+          console.log(`Restore completed: ${result.fileKey}`)
+          console.log(`Duration: ${result.duration}s`)
+        } else {
+          console.error(`Restore failed: ${result.error}`)
+          process.exit(1)
+        }
+      }
+    }
+
+  } catch (err) {
+    logger.error('Restore failed', { error: err instanceof Error ? err.message : String(err) })
+    process.exit(1)
+  }
+}
+
 function versionCommand(): void {
   console.log('backup v0.1.0')
   console.log('Multi-mode database backup tool')
@@ -157,19 +241,27 @@ Usage:
 Commands:
   run          Execute backup
   validate     Validate config file
+  restore      Restore from backup
   version      Show version
   help         Show this help
 
 Options:
-  -c, --config <file>   Config file path (required for run/validate)
+  -c, --config <file>   Config file path (required for run/validate/restore)
   -o, --output <format> Output format: text (default) or json
   --dry-run          Validate dump without uploading
+  --backup-key <key>  Backup file key to restore (required for restore)
+  -d, --database <db> Target database for restore (optional)
+  --tables <list>    Comma-separated table list for partial restore (optional)
+  --clean            Drop existing objects before restore (optional)
+  --create           Create target database if not exists (optional)
 
 Examples:
   backup run --config backup.yaml
   backup run --config backup.yaml --dry-run
   backup validate --config backup.yaml
-  backup run --config backup.yaml --output json
+  backup restore --config backup.yaml --backup-key postgresql-myapp-2026-04-18-10-30-00.sql.gz
+  backup restore --config backup.yaml --backup-key postgresql-myapp-2026-04-18-10-30-00.sql.gz --database myapp_restore
+  backup restore --config backup.yaml --backup-key postgresql-myapp-2026-04-18-10-30-00.sql.gz --tables users,orders --clean
 
 For more information, see:
   https://github.com/taicode-labs/database-backup

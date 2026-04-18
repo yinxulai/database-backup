@@ -1,5 +1,5 @@
 
-import type { Readable } from 'node:stream'
+import type { Readable, Writable } from 'node:stream'
 import type {
   SecretRef,
   BackupGroup,
@@ -7,6 +7,9 @@ import type {
   DumpOptions,
   UploadResult,
   ResolvedConfig,
+  RestoreOptions,
+  RestoreInput,
+  RestoreResult,
 } from './types.js'
 
 // Re-export BackupError so implementations can use it
@@ -39,6 +42,13 @@ export interface DatabaseDriver {
   dump(options: DumpOptions): Promise<Readable>
 
   /**
+   * 执行数据库恢复
+   * @param options 恢复选项
+   * @returns 恢复数据写入流（写入到数据库）
+   */
+  restore(options: RestoreOptions): Promise<Writable>
+
+  /**
    * 关闭连接
    */
   close(): Promise<void>
@@ -55,6 +65,13 @@ export interface StorageDriver {
    * @returns 上传结果
    */
   upload(data: Readable, key: string): Promise<UploadResult>
+
+  /**
+   * 下载数据
+   * @param key 存储路径
+   * @returns 下载数据流
+   */
+  download(key: string): Promise<Readable>
 
   /**
    * 删除文件
@@ -155,6 +172,14 @@ export interface BackupExecutor {
    * @returns 备份结果
    */
   executeTo(config: ResolvedConfig, outputKey?: string, dryRun?: boolean): Promise<BackupResult>
+
+  /**
+   * 执行数据库恢复
+   * @param config 已解析的配置
+   * @param input 恢复输入选项
+   * @returns 恢复结果
+   */
+  restore(config: ResolvedConfig, input: RestoreInput): Promise<RestoreResult>
 }
 
 export interface BackupExecutorOptions {

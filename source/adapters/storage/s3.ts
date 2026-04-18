@@ -11,6 +11,7 @@ import {
   DeleteObjectCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
+  GetObjectCommand,
 } from '@aws-sdk/client-s3'
 import type { StorageObject } from '@core/interfaces'
 import type { ResolvedS3Config, UploadResult } from '@core/types'
@@ -39,6 +40,31 @@ export class S3StorageDriver implements StorageDriver {
       forcePathStyle: config.forcePathStyle,
     })
     this.logger = logger ?? createLogger()
+  }
+
+  /**
+   * Download data from S3
+   */
+  async download(key: string): Promise<Readable> {
+    const fullKey = this.config.pathPrefix
+      ? `${this.config.pathPrefix}/${key}`
+      : key
+
+    this.logger.debug('S3 download started', { key: fullKey, bucket: this.config.bucket })
+
+    const command = new GetObjectCommand({
+      Bucket: this.config.bucket,
+      Key: fullKey,
+    })
+
+    const response = await this.client.send(command)
+
+    this.logger.info('S3 download completed', {
+      key: fullKey,
+      bucket: this.config.bucket
+    })
+
+    return response.Body as Readable
   }
 
   /**
