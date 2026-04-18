@@ -1,6 +1,6 @@
 /**
  * @fileoverview CLI entry point
- * @module @taicode/backup/cli/run
+ * @module @yinxulai/database-backup/cli/run
  */
 
 import { parseArgs } from 'node:util'

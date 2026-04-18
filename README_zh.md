@@ -1,4 +1,4 @@
-# @taicode/backup
+# @yinxulai/database-backup
 
 多模式数据库备份工具，采用 CI-first 架构。支持 PostgreSQL 数据库备份到 S3 兼容存储。
 
@@ -14,13 +14,13 @@
 
 ```bash
 # 使用 npm
-npm install @taicode/backup
+npm install @yinxulai/database-backup
 
 # 使用 pnpm
-pnpm add @taicode/backup
+pnpm add @yinxulai/database-backup
 
 # 使用 yarn
-yarn add @taicode/backup
+yarn add @yinxulai/database-backup
 ```
 
 ## 快速开始
@@ -29,7 +29,7 @@ yarn add @taicode/backup
 
 ```yaml
 # backup.yaml
-apiVersion: backup.taicode/v1
+apiVersion: backup.yinxulai/v1
 kind: BackupGroup
 metadata:
   name: my-database-backup
@@ -73,7 +73,7 @@ backup run --config backup.yaml
 ### BackupGroup 结构
 
 ```yaml
-apiVersion: backup.taicode/v1
+apiVersion: backup.yinxulai/v1
 kind: BackupGroup
 metadata:
   name: 备份组名称
@@ -132,7 +132,7 @@ backup run --help
 ## 代码调用
 
 ```typescript
-import { createBackupExecutor, createYamlConfigScanner } from '@taicode/backup'
+import { createBackupExecutor, createYamlConfigScanner } from '@yinxulai/database-backup'
 
 const scanner = createYamlConfigScanner()
 const executor = createBackupExecutor()
@@ -188,7 +188,7 @@ schedule: "0 2 * * *"  # 每天凌晨 2 点
 
 config:
   content: |
-    apiVersion: backup.taicode/v1
+    apiVersion: backup.yinxulai/v1
     kind: BackupGroup
     metadata:
       name: my-backup

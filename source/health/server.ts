@@ -1,6 +1,6 @@
 /**
  * @fileoverview Health check HTTP server
- * @module @taicode/backup/health/server
+ * @module @yinxulai/database-backup/health/server
  */
 
 import { createServer, type Server } from 'node:http'

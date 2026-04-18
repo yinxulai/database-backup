@@ -1,6 +1,6 @@
 /**
  * @fileoverview Database backup library entry point
- * @module @taicode/backup
+ * @module @yinxulai/database-backup
  */
 
 export * from './core/index.js'

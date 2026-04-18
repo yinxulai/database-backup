@@ -1,4 +1,4 @@
-# @taicode/backup
+# @yinxulai/database-backup
 
 A multi-mode database backup tool with CI-first architecture. Supports PostgreSQL databases with S3-compatible storage.
 
@@ -14,13 +14,13 @@ A multi-mode database backup tool with CI-first architecture. Supports PostgreSQ
 
 ```bash
 # Using npm
-npm install @taicode/backup
+npm install @yinxulai/database-backup
 
 # Using pnpm
-pnpm add @taicode/backup
+pnpm add @yinxulai/database-backup
 
 # Using yarn
-yarn add @taicode/backup
+yarn add @yinxulai/database-backup
 ```
 
 ## Quick Start
@@ -29,7 +29,7 @@ yarn add @taicode/backup
 
 ```yaml
 # backup.yaml
-apiVersion: backup.taicode/v1
+apiVersion: backup.yinxulai/v1
 kind: BackupGroup
 metadata:
   name: my-database-backup
@@ -73,7 +73,7 @@ backup run --config backup.yaml
 ### BackupGroup Structure
 
 ```yaml
-apiVersion: backup.taicode/v1
+apiVersion: backup.yinxulai/v1
 kind: BackupGroup
 metadata:
   name: backup-group-name
@@ -132,7 +132,7 @@ backup run --help
 ## Programmatic Usage
 
 ```typescript
-import { createBackupExecutor, createYamlConfigScanner } from '@taicode/backup'
+import { createBackupExecutor, createYamlConfigScanner } from '@yinxulai/database-backup'
 
 const scanner = createYamlConfigScanner()
 const executor = createBackupExecutor()
@@ -188,7 +188,7 @@ schedule: "0 2 * * *"  # Daily at 2 AM
 
 config:
   content: |
-    apiVersion: backup.taicode/v1
+    apiVersion: backup.yinxulai/v1
     kind: BackupGroup
     metadata:
       name: my-backup

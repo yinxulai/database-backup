@@ -143,7 +143,7 @@ database-backup/
 
 ```json
 {
-  "name": "@taicode/db-backup",
+  "name": "@yinxulai/database-backup",
   "version": "0.1.0",
   "description": "Multi-mode database backup tool with CI-first architecture",
   "type": "module",

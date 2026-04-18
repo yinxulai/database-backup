@@ -1,6 +1,6 @@
 /**
  * @fileoverview Logger tests
- * @module @taicode/backup/core/logger.test
+ * @module @yinxulai/database-backup/core/logger.test
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'

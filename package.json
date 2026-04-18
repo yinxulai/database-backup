@@ -1,5 +1,5 @@
 {
-  "name": "@taicode/backup",
+  "name": "@yinxulai/database-backup",
   "version": "0.1.0",
   "description": "Multi-mode database backup tool with CI-first architecture",
   "type": "module",
@@ -50,6 +50,6 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/taicode-labs/database-backup.git"
+    "url": "git+https://github.com/yinxulai/database-backup.git"
   }
 }

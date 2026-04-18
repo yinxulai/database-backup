@@ -1,6 +1,6 @@
 /**
  * @fileoverview Structured JSON logger
- * @module @taicode/backup/core/logger
+ * @module @yinxulai/database-backup/core/logger
  */
 
 export interface LogEntry {

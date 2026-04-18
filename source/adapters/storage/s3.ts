@@ -1,6 +1,6 @@
 /**
  * @fileoverview S3 storage driver
- * @module @taicode/backup/adapters/storage/s3
+ * @module @yinxulai/database-backup/adapters/storage/s3
  */
 
 import { Readable } from 'node:stream'

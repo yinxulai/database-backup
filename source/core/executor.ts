@@ -1,6 +1,6 @@
 /**
  * @fileoverview Backup executor implementation
- * @module @taicode/backup/core/executor
+ * @module @yinxulai/database-backup/core/executor
  */
 
 import { randomUUID } from 'node:crypto'

@@ -11,7 +11,7 @@ describe('YamlConfigScanner', () => {
 
     it('should validate correct config', () => {
       const config = `
-apiVersion: backup.taicode/v1
+apiVersion: backup.yinxulai/v1
 kind: BackupGroup
 metadata:
   name: test-backup
@@ -71,7 +71,7 @@ spec:
 
     it('should reject missing metadata.name', () => {
       const config = `
-apiVersion: backup.taicode/v1
+apiVersion: backup.yinxulai/v1
 kind: BackupGroup
 metadata: {}
 spec:
@@ -100,7 +100,7 @@ spec:
 
     it('should reject missing source', () => {
       const config = `
-apiVersion: backup.taicode/v1
+apiVersion: backup.yinxulai/v1
 kind: BackupGroup
 metadata:
   name: test-backup
@@ -120,7 +120,7 @@ spec:
 
     it('should reject missing destination', () => {
       const config = `
-apiVersion: backup.taicode/v1
+apiVersion: backup.yinxulai/v1
 kind: BackupGroup
 metadata:
   name: test-backup
@@ -144,7 +144,7 @@ spec:
 
     it('should reject invalid database type', () => {
       const config = `
-apiVersion: backup.taicode/v1
+apiVersion: backup.yinxulai/v1
 kind: BackupGroup
 metadata:
   name: test-backup
@@ -174,7 +174,7 @@ spec:
 
     it('should accept valid cron expression', () => {
       const config = `
-apiVersion: backup.taicode/v1
+apiVersion: backup.yinxulai/v1
 kind: BackupGroup
 metadata:
   name: test-backup
@@ -205,7 +205,7 @@ spec:
 
     it('should handle YAML parse errors', () => {
       const config = `
-apiVersion: backup.taicode/v1
+apiVersion: backup.yinxulai/v1
 kind: BackupGroup
 metadata:
   name: test-backup

@@ -13,7 +13,7 @@ describe('RetentionExecutor', () => {
 
   const mockConfig: ResolvedConfig = {
     group: {
-      apiVersion: 'backup.taicode/v1',
+      apiVersion: 'backup.yinxulai/v1',
       kind: 'BackupGroup',
       metadata: { name: 'test-backup' },
       spec: {

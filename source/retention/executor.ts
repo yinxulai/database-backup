@@ -1,6 +1,6 @@
 /**
  * @fileoverview Retention executor implementation
- * @module @taicode/backup/retention/executor
+ * @module @yinxulai/database-backup/retention/executor
  */
 
 import type { StorageDriver } from '../core/interfaces.js'
