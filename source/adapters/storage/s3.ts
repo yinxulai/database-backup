@@ -3,7 +3,7 @@
  * @module @yinxulai/database-backup/adapters/storage/s3
  */
 
-import { Readable } from 'node:stream'
+import type { Readable } from 'node:stream'
 import type { Readable as NodeReadable } from 'node:stream'
 import {
   S3Client,

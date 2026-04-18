@@ -6,8 +6,7 @@
 
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { Readable, Writable } from 'node:stream'
-import type { Readable as NodeReadable, Writable as NodeWritable } from 'node:stream'
+import type { Readable, Writable } from 'node:stream'
 import type { DumpOptions, RestoreOptions, ResolvedConnection } from '@core/types'
 import type { DatabaseDriver } from '@core/interfaces'
 
@@ -61,10 +60,10 @@ export class PostgreSQLDriver implements DatabaseDriver {
       const gzip = spawnGzip('gzip', ['-c'], { stdio: ['pipe', 'pipe', 'pipe'] })
       
       pgDump.stdout.pipe(gzip.stdin)
-      pgDump.stderr.on('data', (data) => {
+      pgDump.stderr.on('data', (data: Buffer | string) => {
         console.error(`[pg_dump] ${data.toString().trim()}`)
       })
-      gzip.stderr.on('data', (data) => {
+      gzip.stderr.on('data', (data: Buffer | string) => {
         console.error(`[gzip] ${data.toString().trim()}`)
       })
       
@@ -78,7 +77,7 @@ export class PostgreSQLDriver implements DatabaseDriver {
       return gzip.stdout
     }
 
-    pgDump.stderr.on('data', (data) => {
+    pgDump.stderr.on('data', (data: Buffer | string) => {
       console.error(`[pg_dump] ${data.toString().trim()}`)
     })
 
@@ -109,7 +108,7 @@ export class PostgreSQLDriver implements DatabaseDriver {
    */
   private async restoreWithPgRestore(
     options: RestoreOptions,
-    spawn: typeof import('node:child_process').spawn
+    spawn: (command: string, args?: string[], options?: any) => any
   ): Promise<Writable> {
     const args = this.buildPgRestoreArgs(options)
     const env = this.createEnv()
@@ -119,7 +118,7 @@ export class PostgreSQLDriver implements DatabaseDriver {
       stdio: ['pipe', 'pipe', 'pipe']
     })
 
-    pgRestore.stderr.on('data', (data) => {
+    pgRestore.stderr.on('data', (data: Buffer | string) => {
       console.error(`[pg_restore] ${data.toString().trim()}`)
     })
 
@@ -131,7 +130,7 @@ export class PostgreSQLDriver implements DatabaseDriver {
    */
   private async restoreWithPsql(
     options: RestoreOptions,
-    spawn: typeof import('node:child_process').spawn
+    spawn: (command: string, args?: string[], options?: any) => any
   ): Promise<Writable> {
     const args = this.buildPsqlArgs(options)
     const env = this.createEnv()
@@ -141,7 +140,7 @@ export class PostgreSQLDriver implements DatabaseDriver {
       stdio: ['pipe', 'pipe', 'pipe']
     })
 
-    psql.stderr.on('data', (data) => {
+    psql.stderr.on('data', (data: Buffer | string) => {
       console.error(`[psql] ${data.toString().trim()}`)
     })
 

@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import type { ResolvedConfig } from './types.js'
-import type { DatabaseDriver, StorageDriver } from './interfaces.js'
+import type { DatabaseDriver, StorageDriver, StorageObject } from './interfaces.js'
 import { DefaultBackupExecutor } from './executor.js'
 import { Readable } from 'node:stream'
 
@@ -51,7 +51,7 @@ class MockStorageDriver implements StorageDriver {
     return Promise.resolve()
   }
 
-  list(_prefix?: string): Promise<import('./interfaces.js').StorageObject[]> {
+  list(_prefix?: string): Promise<StorageObject[]> {
     return Promise.resolve([])
   }
 

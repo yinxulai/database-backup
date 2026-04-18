@@ -3,7 +3,7 @@
  * @module @yinxulai/database-backup/core/logger.test
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { createLogger, DefaultLogger } from './logger.js'
 
 describe('Logger', () => {

@@ -9,12 +9,8 @@ import type {
   RestoreResult,
 } from './types.js'
 import type {
-  SecretResolver,
-  DatabaseDriver,
-  StorageDriver,
   BackupExecutor,
   BackupExecutorOptions,
-  BackupError,
   BackupErrorCode,
 } from './interfaces.js'
 import { createLogger, type Logger } from './logger.js'

@@ -52,7 +52,7 @@ export class DefaultLogger implements Logger {
       // Extract duration if present
       if ('duration' in metadata && typeof metadata.duration === 'number') {
         entry.duration = metadata.duration
-        const { duration, ...rest } = metadata
+        const { duration: _, ...rest } = metadata
         entry.metadata = rest
       } else {
         entry.metadata = metadata
