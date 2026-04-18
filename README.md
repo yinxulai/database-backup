@@ -90,9 +90,11 @@ spec:
       host: localhost
       port: 5432
       username: postgres
-      passwordSecretRef:
-        type: env
-        envVar: DB_PASSWORD
+      password: your-password  # simple local usage
+      # or use SecretRef in production:
+      # passwordSecretRef:
+      #   type: env
+      #   envVar: DB_PASSWORD
     database: myapp
     tables: ["*"]  # Empty or omitted = all tables
   destination:
@@ -139,11 +141,12 @@ spec:
       host: string
       port: number             # Default: 5432
       username: string
-      passwordSecretRef:
+      password?: string        # plain text, suitable for local testing
+      passwordSecretRef?:
         type: env              # env | k8s
         envVar: string         # for type=env
         # secretName: string   # for type=k8s
-        # secretKey: string   # for type=k8s
+        # secretKey: string    # for type=k8s
     database: string
     tables: ["*"]              # Empty = all tables
 
@@ -154,12 +157,14 @@ spec:
       endpoint: string
       region: string
       bucket: string
-      accessKeySecretRef:
+      accessKeyId?: string     # plain text, suitable for local testing
+      secretAccessKey?: string # plain text, suitable for local testing
+      accessKeySecretRef?:
         type: env | k8s
         envVar?: string
         secretName?: string
         secretKey?: string
-      secretKeySecretRef:
+      secretKeySecretRef?:
         type: env | k8s
         envVar?: string
         secretName?: string

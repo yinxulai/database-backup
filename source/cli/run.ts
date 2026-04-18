@@ -274,12 +274,27 @@ async function resolveConfig(
 ): Promise<ResolvedConfig> {
   const { source, destination } = group.spec
 
-  const password = await secretResolver.resolve(source.connection.passwordSecretRef)
+  const password = await resolveCredential(
+    source.connection.password,
+    source.connection.passwordSecretRef,
+    secretResolver,
+    'source.connection.password'
+  )
 
   let resolvedS3Config
   if (destination.type === 's3' && destination.s3) {
-    const accessKeyId = await secretResolver.resolve(destination.s3.accessKeySecretRef)
-    const secretAccessKey = await secretResolver.resolve(destination.s3.secretKeySecretRef)
+    const accessKeyId = await resolveCredential(
+      destination.s3.accessKeyId,
+      destination.s3.accessKeySecretRef,
+      secretResolver,
+      'destination.s3.accessKeyId'
+    )
+    const secretAccessKey = await resolveCredential(
+      destination.s3.secretAccessKey,
+      destination.s3.secretKeySecretRef,
+      secretResolver,
+      'destination.s3.secretAccessKey'
+    )
 
     resolvedS3Config = {
       endpoint: destination.s3.endpoint,
@@ -304,6 +319,23 @@ async function resolveConfig(
     },
     s3: resolvedS3Config,
   }
+}
+
+async function resolveCredential(
+  value: string | undefined,
+  ref: BackupGroup['spec']['source']['connection']['passwordSecretRef'],
+  secretResolver: SecretResolver,
+  fieldName: string
+): Promise<string> {
+  if (value !== undefined) {
+    return value
+  }
+
+  if (ref) {
+    return await secretResolver.resolve(ref)
+  }
+
+  throw new Error(`${fieldName} is required`)
 }
 
 function createDatabaseDriver(config: ResolvedConfig): DatabaseDriver {

@@ -32,6 +32,12 @@ spec:
       endpoint: https://s3.amazonaws.com
       region: us-east-1
       bucket: my-backups
+      accessKeySecretRef:
+        type: env
+        envVar: AWS_ACCESS_KEY_ID
+      secretKeySecretRef:
+        type: env
+        envVar: AWS_SECRET_ACCESS_KEY
 `
 
       const result = scanner.validate(config)
@@ -195,12 +201,48 @@ spec:
       endpoint: https://s3.amazonaws.com
       region: us-east-1
       bucket: my-backups
+      accessKeySecretRef:
+        type: env
+        envVar: AWS_ACCESS_KEY_ID
+      secretKeySecretRef:
+        type: env
+        envVar: AWS_SECRET_ACCESS_KEY
   schedule:
     cron: "0 2 * * *"
 `
 
       const result = scanner.validate(config)
       expect(result.valid).toBe(true)
+    })
+
+    it('should accept plain text credentials for local use', () => {
+      const config = `
+apiVersion: database-backup.yinxulai/v1
+kind: BackupGroup
+metadata:
+  name: test-backup
+spec:
+  source:
+    type: postgresql
+    connection:
+      host: localhost
+      port: 5432
+      username: postgres
+      password: plain-db-password
+    database: testdb
+  destination:
+    type: s3
+    s3:
+      endpoint: https://s3.amazonaws.com
+      region: us-east-1
+      bucket: my-backups
+      accessKeyId: plain-access-key
+      secretAccessKey: plain-secret-key
+`
+
+      const result = scanner.validate(config)
+      expect(result.valid).toBe(true)
+      expect(result.errors).toHaveLength(0)
     })
 
     it('should handle YAML parse errors', () => {

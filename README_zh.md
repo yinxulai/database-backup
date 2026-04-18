@@ -85,7 +85,12 @@ spec:
       host: string
       port: number             # 默认: 5432
       username: string
-      password: string | ${环境变量}
+      password?: string        # 明文，适合本地测试
+      passwordSecretRef?:
+        type: env | k8s
+        envVar?: string
+        secretName?: string
+        secretKey?: string
     database: string
 
   # 默认目标存储（可在任务级别覆盖）
@@ -95,8 +100,18 @@ spec:
       endpoint: string
       region: string
       bucket: string
-      accessKeyId: string | ${环境变量}
-      secretAccessKey: string | ${环境变量}
+      accessKeyId?: string     # 明文，适合本地测试
+      secretAccessKey?: string # 明文，适合本地测试
+      accessKeySecretRef?:
+        type: env | k8s
+        envVar?: string
+        secretName?: string
+        secretKey?: string
+      secretKeySecretRef?:
+        type: env | k8s
+        envVar?: string
+        secretName?: string
+        secretKey?: string
       pathPrefix?: string      # 可选路径前缀
 
   # 备份任务列表
@@ -106,13 +121,22 @@ spec:
           # ... 目标存储配置
 ```
 
-### 环境变量引用
+### 凭证配置方式
 
-使用 `${环境变量名}` 语法引用环境变量：
+支持两种方式：
 
 ```yaml
-password: ${DB_PASSWORD}
-accessKeyId: ${AWS_ACCESS_KEY_ID}
+# 方式一：直接写明文（适合本地测试）
+password: your-db-password
+accessKeyId: your-access-key
+secretAccessKey: your-secret-key
+```
+
+```yaml
+# 方式二：使用 SecretRef（推荐生产环境）
+passwordSecretRef:
+  type: env
+  envVar: DB_PASSWORD
 ```
 
 ## CLI 用法

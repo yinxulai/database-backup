@@ -231,6 +231,12 @@ export class YamlConfigScanner implements ConfigScanner {
       if (!s3.bucket) {
         errors.push({ path: `${prefix}.s3.bucket`, message: 'bucket 是必填字段' })
       }
+      if (!s3.accessKeySecretRef && !s3.accessKeyId) {
+        errors.push({ path: `${prefix}.s3.accessKeySecretRef`, message: 'accessKeySecretRef 或 accessKeyId 至少需要提供一个' })
+      }
+      if (!s3.secretKeySecretRef && !s3.secretAccessKey) {
+        errors.push({ path: `${prefix}.s3.secretKeySecretRef`, message: 'secretKeySecretRef 或 secretAccessKey 至少需要提供一个' })
+      }
     }
   }
 

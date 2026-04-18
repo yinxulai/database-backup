@@ -40,8 +40,10 @@ export interface ConnectionConfig {
   port: number
   /** 用户名 */
   username: string
+  /** 明文密码（适合本地测试）*/
+  password?: string
   /** 密码（通过 SecretRef 引用）*/
-  passwordSecretRef: SecretRef
+  passwordSecretRef?: SecretRef
   /** 数据库名称 */
   database: string
   /** 是否使用 SSL */
@@ -70,10 +72,14 @@ export interface S3Config {
   region: string
   /** Bucket 名称 */
   bucket: string
+  /** 明文访问密钥（适合本地测试）*/
+  accessKeyId?: string
+  /** 明文私有密钥（适合本地测试）*/
+  secretAccessKey?: string
   /** 访问密钥（通过 SecretRef 引用）*/
-  accessKeySecretRef: SecretRef
+  accessKeySecretRef?: SecretRef
   /** 私有密钥（通过 SecretRef 引用）*/
-  secretKeySecretRef: SecretRef
+  secretKeySecretRef?: SecretRef
   /** 路径前缀模板 */
   pathPrefix?: string
   /** 是否使用 Path Style（MinIO 需要）*/
