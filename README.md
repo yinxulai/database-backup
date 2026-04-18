@@ -12,15 +12,53 @@ A multi-mode database backup tool with CI-first architecture. Supports PostgreSQ
 
 ## Installation
 
+### Docker
+
 ```bash
-# Using npm
-npm install @yinxulai/database-backup
+# Pull image
+docker pull ghcr.io/yinxulai/database-backup:latest
 
-# Using pnpm
-pnpm add @yinxulai/database-backup
+# Run with environment variables
+docker run --rm \
+  -e DB_PASSWORD=your-password \
+  -e AWS_ACCESS_KEY_ID=your-key \
+  -e AWS_SECRET_ACCESS_KEY=your-secret \
+  -v /path/to/backup.yaml:/config/backup.yaml \
+  ghcr.io/yinxulai/database-backup:latest \
+  backup run --config /config/backup.yaml
+```
 
-# Using yarn
-yarn add @yinxulai/database-backup
+### Kubernetes (Helm)
+
+#### 方式一：使用本地 Chart 目录
+
+```bash
+git clone https://github.com/yinxulai/database-backup.git
+cd database-backup
+
+# 编辑 values.yaml 或使用 --set
+helm install database-backup ./helm/database-backup -f values.yaml
+```
+
+#### 方式二：使用打包的 Chart
+
+```bash
+# 下载最新 Chart
+wget https://github.com/yinxulai/database-backup/releases/latest/download/database-backup-*.tgz
+
+# 安装
+helm install database-backup ./database-backup-*.tgz -f values.yaml
+```
+
+#### 方式三：使用 OCI 镜像（需自行打包 Chart）
+
+```bash
+# 构建并推送 Chart 到 OCI registry
+helm package ./helm/database-backup
+helm push database-backup-*.tgz oci://your-registry/database-backup
+
+# 安装
+helm install database-backup oci://your-registry/database-backup -f values.yaml
 ```
 
 ## Quick Start
@@ -40,7 +78,9 @@ spec:
       host: localhost
       port: 5432
       username: postgres
-      password: ${DB_PASSWORD}
+      passwordSecretRef:
+        type: env
+        envVar: DB_PASSWORD
     database: myapp
     tables: ["*"]  # Empty or omitted = all tables
   destination:
@@ -49,17 +89,21 @@ spec:
       endpoint: https://s3.amazonaws.com
       region: us-east-1
       bucket: my-backups
-      accessKeyId: ${AWS_ACCESS_KEY_ID}
-      secretAccessKey: ${AWS_SECRET_ACCESS_KEY}
+      accessKeySecretRef:
+        type: env
+        envVar: AWS_ACCESS_KEY_ID
+      secretKeySecretRef:
+        type: env
+        envVar: AWS_SECRET_ACCESS_KEY
 ```
 
 ### 2. Run backup
 
 ```bash
-# Using CLI
+# Run with CLI
 backup run --config backup.yaml
 
-# Environment variables
+# Environment variables (for local development)
 export DB_PASSWORD=your-password
 export AWS_ACCESS_KEY_ID=your-key
 export AWS_SECRET_ACCESS_KEY=your-secret
@@ -83,7 +127,11 @@ spec:
       host: string
       port: number             # Default: 5432
       username: string
-      password: string | ${ENV_VAR}
+      passwordSecretRef:
+        type: env              # env | k8s
+        envVar: string         # for type=env
+        # secretName: string   # for type=k8s
+        # secretKey: string   # for type=k8s
     database: string
     tables: ["*"]              # Empty = all tables
 
@@ -94,28 +142,35 @@ spec:
       endpoint: string
       region: string
       bucket: string
-      accessKeyId: string | ${ENV_VAR}
-      secretAccessKey: string | ${ENV_VAR}
+      accessKeySecretRef:
+        type: env | k8s
+        envVar?: string
+        secretName?: string
+        secretKey?: string
+      secretKeySecretRef:
+        type: env | k8s
+        envVar?: string
+        secretName?: string
+        secretKey?: string
       pathPrefix?: string      # Optional: "{{.Database}}/{{.Date}}"
-
-  # Schedule (optional, omit for manual execution)
-  schedule:
-    cron: "0 2 * * *"         # Cron expression
-    timezone: "Asia/Shanghai"  # Optional timezone
 
   # Retention policy (optional)
   retention:
     retentionDays: 7           # Keep backups for N days
 ```
 
-### Environment Variable Reference
+### Secret Reference Types
 
-Use `${ENV_VAR_NAME}` syntax to reference environment variables:
+For sensitive credentials, use `SecretRef`:
 
-```yaml
-password: ${DB_PASSWORD}
-accessKeyId: ${AWS_ACCESS_KEY_ID}
-```
+| Type | Usage | Example |
+|------|-------|---------|
+| `env` | Environment variable | `envVar: "DB_PASSWORD"` |
+| `k8s` | Kubernetes Secret | `secretName: "my-secret", secretKey: "password"` |
+
+### Environment Variable Reference (for local development)
+
+Use `${ENV_VAR_NAME}` syntax in backup.yaml for local runs.
 
 ## CLI Usage
 
@@ -129,22 +184,6 @@ backup validate --config <path-to-config>
 # Show help
 backup --help
 backup run --help
-```
-
-## Programmatic Usage
-
-```typescript
-import { createBackupExecutor, createYamlConfigScanner } from '@yinxulai/database-backup'
-
-const scanner = createYamlConfigScanner()
-const executor = createBackupExecutor()
-
-// Load and execute
-const configs = await scanner.scanFromFile('./backup.yaml')
-for (const config of configs) {
-  const result = await executor.execute(config)
-  console.log(`Backup completed: ${result.key}`)
-}
 ```
 
 ## Deployment
@@ -162,28 +201,33 @@ docker run --rm \
   -e AWS_SECRET_ACCESS_KEY=your-secret \
   -v /path/to/backup.yaml:/config/backup.yaml \
   ghcr.io/yinxulai/database-backup:latest \
-  run --config /config/backup.yaml
+  backup run --config /config/backup.yaml
 ```
 
-### Kubernetes (Helm)
+### Kubernetes (Helm) - Complete Example
+
+#### Step 1: Create Kubernetes Secrets
 
 ```bash
-# Install with Helm
-helm install database-backup oci://ghcr.io/yinxulai/helm/database-backup \
-  --set config.content="$(cat backup.yaml)"
+# Create PostgreSQL password secret
+kubectl create secret generic postgres-secret \
+  --from-literal=password=your-db-password
 
-# Or use values file
-helm install database-backup oci://ghcr.io/yinxulai/helm/database-backup -f values.yaml
+# Create AWS credentials secret
+kubectl create secret generic aws-secret \
+  --from-literal=access-key-id=your-aws-key \
+  --from-literal=secret-access-key=your-aws-secret
 ```
 
-Example `values.yaml`:
+#### Step 2: Create values.yaml
 
 ```yaml
+# values.yaml
 image:
   repository: ghcr.io/yinxulai/database-backup
   tag: "latest"
 
-schedule: "0 2 * * *"  # Daily at 2 AM
+schedule: "0 2 * * *"  # Daily at 2 AM UTC
 
 config:
   content: |
@@ -218,18 +262,21 @@ config:
             type: k8s
             secretName: aws-secret
             secretKey: secret-access-key
+      retention:
+        retentionDays: 7
+```
 
-env:
-  - name: AWS_ACCESS_KEY_ID
-    valueFrom:
-      secretKeyRef:
-        name: aws-secret
-        key: access-key-id
-  - name: AWS_SECRET_ACCESS_KEY
-    valueFrom:
-      secretKeyRef:
-        name: aws-secret
-        key: secret-access-key
+#### Step 3: Install with Helm
+
+```bash
+# Install
+helm install database-backup ./helm/database-backup -f values.yaml
+
+# Check status
+kubectl get cronjob
+
+# Manually trigger a backup
+kubectl create job --from=cronjob/database-backup manual-backup-$(date +%s)
 ```
 
 ### Binary
@@ -240,7 +287,7 @@ Download from [GitHub Releases](https://github.com/yinxulai/database-backup/rele
 # Linux
 wget https://github.com/yinxulai/database-backup/releases/latest/download/backup-linux-x64
 chmod +x backup-linux-x64
-./backup-linux-x64 run --config backup.yaml
+./backup-linux-x64 backup run --config backup.yaml
 ```
 
 ## Development
@@ -255,8 +302,11 @@ pnpm typecheck
 # Run tests
 pnpm test
 
-# Run CLI
+# Run CLI (local development)
 pnpm dev
+
+# Run CLI (production mode)
+pnpm backup
 ```
 
 ## License
