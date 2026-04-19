@@ -80,7 +80,6 @@ describe('runCli', () => {
           port: 5432,
           username: 'postgres',
           password: '${DB_PASSWORD}',
-          database: 'testdb',
           ssl: false,
         },
         database: 'testdb',

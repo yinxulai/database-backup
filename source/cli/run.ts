@@ -303,7 +303,7 @@ async function resolveConfig(
       port: source.connection.port,
       username: expandEnvVars(source.connection.username, 'source.connection.username'),
       password,
-      database: expandEnvVars(source.connection.database ?? source.database, 'source.database'),
+      database: expandEnvVars(source.database, 'source.database'),
       ssl: source.connection.ssl ?? false,
     },
     s3: resolvedS3Config

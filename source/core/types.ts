@@ -20,9 +20,9 @@ export type StorageType = 's3' | 'gcs' | 'azure' | 'local'
 export interface BackupSource {
   /** 数据库类型 */
   type: DatabaseType
-  /** 连接配置 */
+  /** 连接配置（主机/端口/认证信息） */
   connection: ConnectionConfig
-  /** 数据库名称 */
+  /** 目标数据库名称（实际备份以这里为准） */
   database: string
   /** 要备份的表（支持 schema.table；省略或空数组 = 所有 table）*/
   tables?: string[]
@@ -40,8 +40,6 @@ export interface ConnectionConfig {
   username: string
   /** 密码（明文或 ${ENV_VAR}）*/
   password: string
-  /** 数据库名称 */
-  database: string
   /** 是否使用 SSL */
   ssl?: boolean
 }

@@ -81,7 +81,6 @@ describe('DefaultBackupExecutor', () => {
           port: 5432,
           username: 'postgres',
           password: 'secret',
-          database: 'testdb',
           ssl: false,
         },
         database: 'testdb',
@@ -163,10 +162,10 @@ describe('DefaultBackupExecutor', () => {
     expect(result.fileKey).not.toContain('{{.Date}}')
   })
 
-  it('should use the resolved connection database for dump and file key generation', async () => {
+  it('should use source.database as the backup target for dump and file key generation', async () => {
     const config = createMockConfig()
-    config.config.source.database = 'postgres'
-    config.connection.database = 'taicode-labs'
+    config.config.source.database = 'taicode-labs'
+    config.connection.database = 'postgres'
     config.config.destination.s3!.pathPrefix = '{{.Database}}/{{.Date}}'
     config.s3!.pathPrefix = '{{.Database}}/{{.Date}}'
 

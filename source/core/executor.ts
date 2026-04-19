@@ -68,7 +68,7 @@ export class DefaultBackupExecutor implements BackupExecutor {
 
     const effectiveConfig = this.prepareRuntimeConfig(config, result.startTime)
     const { source, destination } = effectiveConfig.config
-    const databaseName = effectiveConfig.connection.database
+    const databaseName = source.database
 
     // Create database and storage drivers
     const dbDriver = this.options.databaseDriverFactory.create(effectiveConfig)
@@ -190,7 +190,7 @@ export class DefaultBackupExecutor implements BackupExecutor {
     try {
       // 1. Determine the target database and format from backup key
       const backupInfo = this.parseBackupKey(input.backupKey)
-      const targetDatabase = input.database ?? backupInfo.database ?? config.connection.database
+      const targetDatabase = input.database ?? backupInfo.database ?? config.config.source.database
 
       log.info('Starting restore', {
         backupKey: input.backupKey,
@@ -285,7 +285,7 @@ export class DefaultBackupExecutor implements BackupExecutor {
    */
   private generateFileKey(config: ResolvedConfig, now = new Date()): string {
     const { source } = config.config
-    const databaseName = config.connection.database
+    const databaseName = source.database
     const date = now.toISOString().split('T')[0]
     const time = now.toTimeString().split(' ')[0].replace(/:/g, '-')
 
@@ -311,7 +311,7 @@ export class DefaultBackupExecutor implements BackupExecutor {
     const date = now.toISOString().split('T')[0]
     const time = now.toTimeString().split(' ')[0].replace(/:/g, '-')
     const { source } = config.config
-    const databaseName = config.connection.database
+    const databaseName = source.database
 
     const renderedPathPrefix = config.s3.pathPrefix
       .replaceAll('{{.Database}}', databaseName)
