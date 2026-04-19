@@ -93,12 +93,17 @@ destination:
     bucket: string
     accessKeyId: string        # 明文，或 ${AWS_ACCESS_KEY_ID}
     secretAccessKey: string    # 明文，或 ${AWS_SECRET_ACCESS_KEY}
-    pathPrefix?: string        # 可选路径前缀
+    pathPrefix?: string        # 可选固定前缀，例如 backups/prod
 
 # 保留策略（可选）
 retention:
   retentionDays: 7
 ```
+
+实际备份路径会自动按下面的结构生成：
+
+- 前缀 / 数据库类型 / 数据库名 / YYYY / MM / DD / 任务名-HH-mm-ss.sql.gz
+- 配置了 retention 后，每次备份结束都会自动执行清理
 
 现在仅支持普通的顶层 YAML 配置结构。
 

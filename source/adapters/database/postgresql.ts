@@ -60,15 +60,13 @@ export class PostgreSQLDriver implements DatabaseDriver {
       console.error(`[pg_dump] ${data.toString().trim()}`)
     })
     pgDump.on('error', (err) => output.destroy(err))
-    pgDump.on('close', (code) => {
-      if (code !== 0) {
-        output.destroy(new Error(`pg_dump exited with code ${code}`))
-      } else if (!output.destroyed) {
-        output.end()
-      }
-    })
 
     if (options.compression === 'gzip') {
+      pgDump.on('close', (code) => {
+        if (code !== 0) {
+          output.destroy(new Error(`pg_dump exited with code ${code}`))
+        }
+      })
       const { spawn: spawnGzip } = await import('node:child_process')
       const gzip = spawnGzip('gzip', ['-c'], { stdio: ['pipe', 'pipe', 'pipe'] })
 
@@ -89,6 +87,14 @@ export class PostgreSQLDriver implements DatabaseDriver {
 
       return output
     }
+
+    pgDump.on('close', (code) => {
+      if (code !== 0) {
+        output.destroy(new Error(`pg_dump exited with code ${code}`))
+      } else if (!output.destroyed) {
+        output.end()
+      }
+    })
 
     pgDump.stdout.pipe(output, { end: false })
     return output

@@ -203,6 +203,33 @@ destination:
       expect(result.errors).toHaveLength(0)
     })
 
+    it('should reject legacy source.connection.database to avoid wrong target backups', () => {
+      const config = `
+name: test-backup
+source:
+  type: postgresql
+  connection:
+    host: localhost
+    port: 5432
+    username: postgres
+    password: plain-db-password
+    database: postgres
+  database: taicode-labs
+destination:
+  type: s3
+  s3:
+    endpoint: https://s3.amazonaws.com
+    region: us-east-1
+    bucket: my-backups
+    accessKeyId: plain-access-key
+    secretAccessKey: plain-secret-key
+`
+
+      const result = scanner.validate(config)
+      expect(result.valid).toBe(false)
+      expect(result.errors.some((e: { path: string, message: string }) => e.path === 'source.connection.database' && e.message.includes('source.database'))).toBe(true)
+    })
+
   })
 
   describe('scan()', () => {

@@ -177,4 +177,34 @@ describe('RetentionExecutor', () => {
     expect(result.deleteCount).toBe(1)
     expect(result.deletedCount).toBe(1)
   })
+
+  it('should return failed status instead of throwing when listing storage fails', async () => {
+    vi.mocked(mockStorageDriver.list).mockRejectedValue(new Error('S3 unavailable'))
+
+    const result = await executor.applyRetention(mockConfig)
+
+    expect(result.status).toBe('failed')
+    expect(result.error).toContain('S3 unavailable')
+  })
+
+  it('should return failed status when deleting expired files fails', async () => {
+    const now = new Date()
+    const expiredDate = new Date(now)
+    expiredDate.setDate(expiredDate.getDate() - 10)
+
+    vi.mocked(mockStorageDriver.list).mockResolvedValue([
+      {
+        key: 'backups/postgresql-testdb-2026-04-08-12-00-00.sql.gz',
+        size: 1024,
+        lastModified: expiredDate,
+      },
+    ])
+    vi.mocked(mockStorageDriver.delete).mockRejectedValue(new Error('Delete denied'))
+
+    const result = await executor.applyRetention(mockConfig)
+
+    expect(result.status).toBe('failed')
+    expect(result.deletedCount).toBe(0)
+    expect(result.error).toContain('Delete denied')
+  })
 })

@@ -177,6 +177,12 @@ export class YamlConfigScanner implements ConfigScanner {
       if (!conn.password) {
         errors.push({ path: `${prefix}.connection.password`, message: 'password 是必填字段，可直接填写或使用 ${ENV_VAR}' })
       }
+      if (conn.database !== undefined) {
+        errors.push({
+          path: `${prefix}.connection.database`,
+          message: 'source.connection.database 已不再支持，请只使用 source.database',
+        })
+      }
     }
 
     // database

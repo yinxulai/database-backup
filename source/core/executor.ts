@@ -66,7 +66,7 @@ export class DefaultBackupExecutor implements BackupExecutor {
       startTime: new Date(),
     }
 
-    const effectiveConfig = this.prepareRuntimeConfig(config, result.startTime)
+    const effectiveConfig = this.prepareRuntimeConfig(config)
     const { source, destination } = effectiveConfig.config
     const databaseName = source.database
 
@@ -143,7 +143,13 @@ export class DefaultBackupExecutor implements BackupExecutor {
 
       // 8. Save result
       if (this.options.resultStore) {
-        await this.options.resultStore.save(result)
+        try {
+          await this.options.resultStore.save(result)
+        } catch (saveError) {
+          log.warn('Failed to save backup result', {
+            error: saveError instanceof Error ? saveError.message : String(saveError),
+          })
+        }
       }
 
       return result
@@ -158,13 +164,25 @@ export class DefaultBackupExecutor implements BackupExecutor {
 
       // Save failed result
       if (this.options.resultStore) {
-        await this.options.resultStore.save(result)
+        try {
+          await this.options.resultStore.save(result)
+        } catch (saveError) {
+          log.warn('Failed to save backup result', {
+            error: saveError instanceof Error ? saveError.message : String(saveError),
+          })
+        }
       }
 
       return result
 
     } finally {
-      await dbDriver.close()
+      try {
+        await dbDriver.close()
+      } catch (closeError) {
+        log.warn('Failed to close database driver', {
+          error: closeError instanceof Error ? closeError.message : String(closeError),
+        })
+      }
     }
   }
 
@@ -260,7 +278,13 @@ export class DefaultBackupExecutor implements BackupExecutor {
       return result
 
     } finally {
-      await dbDriver.close()
+      try {
+        await dbDriver.close()
+      } catch (closeError) {
+        log.warn('Failed to close database driver', {
+          error: closeError instanceof Error ? closeError.message : String(closeError),
+        })
+      }
     }
   }
 
@@ -268,8 +292,15 @@ export class DefaultBackupExecutor implements BackupExecutor {
    * Parse backup key to extract metadata
    */
   private parseBackupKey(key: string): { database?: string; type?: string } {
-    // Key format: {type}-{database}-{date}-{time}.sql[.gz]
-    // Example: postgresql-myapp-2026-04-18-10-30-00.sql.gz
+    const segments = key.split('/').filter(Boolean)
+
+    if (segments.length >= 6) {
+      return {
+        type: segments[segments.length - 6],
+        database: segments[segments.length - 5],
+      }
+    }
+
     const basename = key.split('/').pop() ?? key
     const withoutExt = basename.replace(/\.(sql\.gz|sql)$/, '')
     const parts = withoutExt.split('-')
@@ -285,47 +316,50 @@ export class DefaultBackupExecutor implements BackupExecutor {
    */
   private generateFileKey(config: ResolvedConfig, now = new Date()): string {
     const { source } = config.config
-    const databaseName = source.database
-    const date = now.toISOString().split('T')[0]
+    const databaseName = this.sanitizePathSegment(source.database)
+    const taskName = this.sanitizePathSegment(config.config.name)
+    const [date] = now.toISOString().split('T')
+    const [year, month, day] = date.split('-')
     const time = now.toTimeString().split(' ')[0].replace(/:/g, '-')
+    const extension = config.config.destination.type === 's3' ? 'sql.gz' : 'sql'
 
-    let key = `${source.type}-${databaseName}-${date}-${time}.sql`
+    const segments = [
+      config.s3?.pathPrefix,
+      source.type,
+      databaseName,
+      year,
+      month,
+      day,
+      `${taskName}-${time}.${extension}`,
+    ].filter((value): value is string => Boolean(value && value.trim().length > 0))
 
-    if (config.s3?.pathPrefix) {
-      key = `${config.s3.pathPrefix}/${key}`
-    }
-
-    key += '.gz'
-
-    return key
+    return segments.join('/')
   }
 
   /**
-   * Render runtime-only S3 template variables once so uploads and generated keys stay consistent.
+   * Normalize the configured prefix once so key generation and uploads stay consistent.
    */
-  private prepareRuntimeConfig(config: ResolvedConfig, now = new Date()): ResolvedConfig {
+  private prepareRuntimeConfig(config: ResolvedConfig): ResolvedConfig {
     if (!config.s3?.pathPrefix) {
       return config
     }
-
-    const date = now.toISOString().split('T')[0]
-    const time = now.toTimeString().split(' ')[0].replace(/:/g, '-')
-    const { source } = config.config
-    const databaseName = source.database
-
-    const renderedPathPrefix = config.s3.pathPrefix
-      .replaceAll('{{.Database}}', databaseName)
-      .replaceAll('{{.Date}}', date)
-      .replaceAll('{{.Time}}', time)
-      .replaceAll('{{.Type}}', source.type)
 
     return {
       ...config,
       s3: {
         ...config.s3,
-        pathPrefix: renderedPathPrefix,
+        pathPrefix: config.s3.pathPrefix.replace(/^\/+|\/+$/g, ''),
       },
     }
+  }
+
+  private sanitizePathSegment(value: string): string {
+    return value
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-zA-Z0-9._-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '') || 'backup'
   }
 
   /**

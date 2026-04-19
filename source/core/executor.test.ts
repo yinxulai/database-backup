@@ -150,31 +150,28 @@ describe('DefaultBackupExecutor', () => {
     expect(result.fileKey).toContain('.gz')
   })
 
-  it('should use pathPrefix in file key when provided', async () => {
+  it('should use a structured prefix-based file key when provided', async () => {
     const config = createMockConfig()
-    config.config.destination.s3!.pathPrefix = '{{.Database}}/{{.Date}}'
-    config.s3!.pathPrefix = '{{.Database}}/{{.Date}}'
+    config.config.destination.s3!.pathPrefix = '/prod/backups/'
+    config.s3!.pathPrefix = '/prod/backups/'
 
     const result = await executor.execute(config)
 
-    expect(result.fileKey).toContain('testdb/')
-    expect(result.fileKey).not.toContain('{{.Database}}')
-    expect(result.fileKey).not.toContain('{{.Date}}')
+    expect(result.fileKey).toMatch(/^prod\/backups\/postgresql\/testdb\/\d{4}\/\d{2}\/\d{2}\/test-backup-\d{2}-\d{2}-\d{2}\.sql\.gz$/)
   })
 
-  it('should use source.database as the backup target for dump and file key generation', async () => {
+  it('should use source.database as the backup target and in the structured key', async () => {
     const config = createMockConfig()
     config.config.source.database = 'taicode-labs'
     config.connection.database = 'postgres'
-    config.config.destination.s3!.pathPrefix = '{{.Database}}/{{.Date}}'
-    config.s3!.pathPrefix = '{{.Database}}/{{.Date}}'
+    config.config.destination.s3!.pathPrefix = 'prod'
+    config.s3!.pathPrefix = 'prod'
 
     const result = await executor.execute(config)
 
     expect(mockDbDriver.getLastDumpOptions()?.database).toBe('taicode-labs')
-    expect(result.fileKey).toContain('taicode-labs/')
-    expect(result.fileKey).toContain('postgresql-taicode-labs-')
-    expect(result.fileKey).not.toContain('postgres/')
+    expect(result.fileKey).toContain('prod/postgresql/taicode-labs/')
+    expect(result.fileKey).not.toContain('prod/postgresql/postgres/')
   })
 
   it('should call database dump', async () => {

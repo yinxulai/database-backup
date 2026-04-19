@@ -148,6 +148,62 @@ describe('PostgreSQLDriver', () => {
       await expect(streamResult).resolves.toContain('pg_dump exited with code 1')
     })
 
+    it('should keep the gzip output open until compression finishes flushing', async () => {
+      const pgDumpProcess = new EventEmitter() as EventEmitter & {
+        stdout: PassThrough
+        stderr: PassThrough
+        kill: ReturnType<typeof vi.fn>
+      }
+      pgDumpProcess.stdout = new PassThrough()
+      pgDumpProcess.stderr = new PassThrough()
+      pgDumpProcess.kill = vi.fn()
+
+      const gzipProcess = new EventEmitter() as EventEmitter & {
+        stdin: PassThrough
+        stdout: PassThrough
+        stderr: PassThrough
+      }
+      gzipProcess.stdin = new PassThrough()
+      gzipProcess.stdout = new PassThrough()
+      gzipProcess.stderr = new PassThrough()
+
+      const mockSpawn = vi.fn()
+        .mockImplementation((command: string) => {
+          if (command === 'pg_dump') {
+            return pgDumpProcess
+          }
+          if (command === 'gzip') {
+            return gzipProcess
+          }
+          throw new Error(`Unexpected command: ${command}`)
+        })
+
+      vi.doMock('node:child_process', async (importOriginal) => {
+        const actual = await importOriginal() as Record<string, unknown>
+        return {
+          ...actual,
+          spawn: mockSpawn,
+        }
+      })
+
+      const localDriver = new PostgreSQLDriver(mockConnection)
+      const stream = await localDriver.dump({ database: 'testdb', tables: [], compression: 'gzip' })
+
+      const streamResult = new Promise<string>((resolve, reject) => {
+        const chunks: Buffer[] = []
+        stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
+        stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')))
+        stream.on('error', reject)
+      })
+
+      pgDumpProcess.emit('close', 0)
+      gzipProcess.stdout.write('compressed-data')
+      gzipProcess.stdout.end()
+      gzipProcess.emit('close', 0)
+
+      await expect(streamResult).resolves.toBe('compressed-data')
+    })
+
     it('should dump all schemas when no table filter is provided', async () => {
       const mockSpawn = vi.fn()
         .mockReturnValue({

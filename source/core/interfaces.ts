@@ -1,7 +1,6 @@
 
 import type { Readable, Writable } from 'node:stream'
 import type {
-  SecretRef,
   BackupConfig,
   BackupResult,
   DumpOptions,
@@ -14,15 +13,6 @@ import type {
 
 // Re-export BackupError so implementations can use it
 export { BackupExecutionError as BackupError } from './executor.js'
-
-export interface SecretResolver {
-  /**
-   * 解析密钥引用
-   * @param ref 密钥引用
-   * @returns 实际密钥值
-   */
-  resolve(ref: SecretRef): Promise<string>
-}
 
 export interface DatabaseDriver {
   /** 数据库类型 */
@@ -158,7 +148,9 @@ export interface ResultStore {
 
 export interface BackupExecutor {
   /**
-   * 执行备份
+   * 执行备份。
+   * 约定：执行器内部负责捕获业务错误并转换为 failed 结果；
+   * 调用方只根据结果决定是否退出、是否继续后续流程。
    * @param config 已解析的配置
    * @returns 备份结果
    */
@@ -174,7 +166,8 @@ export interface BackupExecutor {
   executeTo(config: ResolvedConfig, outputKey?: string, dryRun?: boolean): Promise<BackupResult>
 
   /**
-   * 执行数据库恢复
+   * 执行数据库恢复。
+   * 同样由执行器内部收敛错误并返回结果对象。
    * @param config 已解析的配置
    * @param input 恢复输入选项
    * @returns 恢复结果

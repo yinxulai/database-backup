@@ -45,64 +45,71 @@ export class RetentionExecutor {
       deletedFiles: [],
     }
 
-    const retention = config.config.retention
-    if (!retention) {
-      log.info('No retention policy configured, skipping')
-      return result
-    }
-
-    const { retentionDays } = retention
-    if (!retentionDays || retentionDays <= 0) {
-      log.info('Retention days is 0 or negative, skipping cleanup')
-      return result
-    }
-
-    const cutoffDate = new Date()
-    cutoffDate.setDate(cutoffDate.getDate() - retentionDays)
-    log.info('Applying retention policy', { retentionDays, cutoffDate: cutoffDate.toISOString() })
-
-    // List all objects
-    const objects = await this.storageDriver.list()
-    result.scannedCount = objects.length
-    log.info('Scanned storage objects', { count: objects.length })
-
-    // Filter expired files
-    const expiredFiles: { key: string; backupDate: Date }[] = []
-    for (const obj of objects) {
-      const backupDate = this.extractBackupDate(obj.key) ?? obj.lastModified
-      if (backupDate < cutoffDate) {
-        expiredFiles.push({ key: obj.key, backupDate })
+    try {
+      const retention = config.config.retention
+      if (!retention) {
+        log.info('No retention policy configured, skipping')
+        return result
       }
-    }
 
-    result.deleteCount = expiredFiles.length
-    if (expiredFiles.length === 0) {
-      log.info('No expired files to delete')
-      return result
-    }
-
-    log.info('Found expired files', { count: expiredFiles.length, files: expiredFiles.map(f => f.key) })
-
-    if (options.dryRun) {
-      log.info('Dry-run mode, skipping deletion')
-      return result
-    }
-
-    // Delete expired files
-    for (const file of expiredFiles) {
-      try {
-        const relativeKey = this.extractRelativeKey(file.key, config)
-        await this.storageDriver.delete(relativeKey)
-        result.deletedCount++
-        result.deletedFiles.push(file.key)
-        log.info('Deleted expired file', { key: file.key })
-      } catch (err) {
-        log.error('Failed to delete file', { key: file.key, error: err instanceof Error ? err.message : String(err) })
-        result.error = 'Failed to delete some files'
+      const { retentionDays } = retention
+      if (!retentionDays || retentionDays <= 0) {
+        log.info('Retention days is 0 or negative, skipping cleanup')
+        return result
       }
-    }
 
-    return result
+      const cutoffDate = new Date()
+      cutoffDate.setDate(cutoffDate.getDate() - retentionDays)
+      log.info('Applying retention policy', { retentionDays, cutoffDate: cutoffDate.toISOString() })
+
+      const objects = await this.storageDriver.list()
+      result.scannedCount = objects.length
+      log.info('Scanned storage objects', { count: objects.length })
+
+      const expiredFiles: { key: string; backupDate: Date }[] = []
+      for (const obj of objects) {
+        const backupDate = this.extractBackupDate(obj.key) ?? obj.lastModified
+        if (backupDate < cutoffDate) {
+          expiredFiles.push({ key: obj.key, backupDate })
+        }
+      }
+
+      result.deleteCount = expiredFiles.length
+      if (expiredFiles.length === 0) {
+        log.info('No expired files to delete')
+        return result
+      }
+
+      log.info('Found expired files', { count: expiredFiles.length, files: expiredFiles.map(f => f.key) })
+
+      if (options.dryRun) {
+        log.info('Dry-run mode, skipping deletion')
+        return result
+      }
+
+      for (const file of expiredFiles) {
+        try {
+          const relativeKey = this.extractRelativeKey(file.key, config)
+          await this.storageDriver.delete(relativeKey)
+          result.deletedCount++
+          result.deletedFiles.push(file.key)
+          log.info('Deleted expired file', { key: file.key })
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          result.status = 'failed'
+          result.error = message
+          log.error('Failed to delete file', { key: file.key, error: message })
+        }
+      }
+
+      return result
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      result.status = 'failed'
+      result.error = message
+      log.error('Retention failed', { error: message })
+      return result
+    }
   }
 
   /**

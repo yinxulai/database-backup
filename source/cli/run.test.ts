@@ -3,6 +3,7 @@ import type { BackupConfig } from '../core/types.js'
 
 const scanMock = vi.fn()
 const executeToMock = vi.fn()
+const applyRetentionMock = vi.fn()
 
 vi.mock('@core/scanner', () => ({
   createConfigScanner: () => ({
@@ -16,6 +17,12 @@ vi.mock('@core/executor', () => ({
   }),
 }))
 
+vi.mock('@retention/executor', () => ({
+  createRetentionExecutor: () => ({
+    applyRetention: applyRetentionMock,
+  }),
+}))
+
 describe('runCli', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -24,6 +31,7 @@ describe('runCli', () => {
     delete process.env.AWS_ACCESS_KEY_ID
     delete process.env.AWS_SECRET_ACCESS_KEY
     executeToMock.mockResolvedValue({ status: 'dry-run-completed' })
+    applyRetentionMock.mockResolvedValue({ status: 'completed' })
   })
 
   it('should support plain text database password in config', async () => {
@@ -36,7 +44,6 @@ describe('runCli', () => {
           port: 5432,
           username: 'postgres',
           password: 'plain-db-password',
-          database: 'testdb',
           ssl: false,
         },
         database: 'testdb',
@@ -114,6 +121,94 @@ describe('runCli', () => {
     exitSpy.mockRestore()
   })
 
+  it('should apply retention after a successful backup run', async () => {
+    const config: BackupConfig = {
+      name: 'test-backup',
+      source: {
+        type: 'postgresql',
+        connection: {
+          host: 'localhost',
+          port: 5432,
+          username: 'postgres',
+          password: 'plain-db-password',
+          ssl: false,
+        },
+        database: 'testdb',
+      },
+      destination: {
+        type: 's3',
+        s3: {
+          endpoint: 'https://s3.example.com',
+          region: 'us-east-1',
+          bucket: 'test-bucket',
+          accessKeyId: 'plain-access-key',
+          secretAccessKey: 'plain-secret-key',
+        },
+      },
+      retention: {
+        retentionDays: 7,
+      },
+    }
+
+    scanMock.mockResolvedValue([config])
+    executeToMock.mockResolvedValue({ status: 'completed' })
+
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('process.exit called')
+    }) as never)
+
+    const { runCli } = await import('./run.js')
+
+    await expect(runCli(['run', '--config', 'backup.yaml'])).resolves.toBeUndefined()
+    expect(applyRetentionMock).toHaveBeenCalledTimes(1)
+
+    exitSpy.mockRestore()
+  })
+
+  it('should stop and skip retention when the backup run fails', async () => {
+    const config: BackupConfig = {
+      name: 'test-backup',
+      source: {
+        type: 'postgresql',
+        connection: {
+          host: 'localhost',
+          port: 5432,
+          username: 'postgres',
+          password: 'plain-db-password',
+          ssl: false,
+        },
+        database: 'testdb',
+      },
+      destination: {
+        type: 's3',
+        s3: {
+          endpoint: 'https://s3.example.com',
+          region: 'us-east-1',
+          bucket: 'test-bucket',
+          accessKeyId: 'plain-access-key',
+          secretAccessKey: 'plain-secret-key',
+        },
+      },
+      retention: {
+        retentionDays: 7,
+      },
+    }
+
+    scanMock.mockResolvedValue([config])
+    executeToMock.mockResolvedValue({ status: 'failed', error: 'Database connection failed' })
+
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('process.exit called')
+    }) as never)
+
+    const { runCli } = await import('./run.js')
+
+    await expect(runCli(['run', '--config', 'backup.yaml'])).rejects.toThrow('process.exit called')
+    expect(applyRetentionMock).not.toHaveBeenCalled()
+
+    exitSpy.mockRestore()
+  })
+
   it('should support plain text s3 credentials in config', async () => {
     const config: BackupConfig = {
       name: 'test-backup',
@@ -124,7 +219,6 @@ describe('runCli', () => {
           port: 5432,
           username: 'postgres',
           password: 'plain-db-password',
-          database: 'testdb',
           ssl: false,
         },
         database: 'testdb',
@@ -155,6 +249,50 @@ describe('runCli', () => {
     const resolvedConfig = executeToMock.mock.calls[0]?.[0]
     expect(resolvedConfig.s3.accessKeyId).toBe('plain-access-key')
     expect(resolvedConfig.s3.secretAccessKey).toBe('plain-secret-key')
+
+    exitSpy.mockRestore()
+  })
+
+  it('should stop when retention execution returns failed', async () => {
+    const config: BackupConfig = {
+      name: 'test-backup',
+      source: {
+        type: 'postgresql',
+        connection: {
+          host: 'localhost',
+          port: 5432,
+          username: 'postgres',
+          password: 'plain-db-password',
+          ssl: false,
+        },
+        database: 'testdb',
+      },
+      destination: {
+        type: 's3',
+        s3: {
+          endpoint: 'https://s3.example.com',
+          region: 'us-east-1',
+          bucket: 'test-bucket',
+          accessKeyId: 'plain-access-key',
+          secretAccessKey: 'plain-secret-key',
+        },
+      },
+      retention: {
+        retentionDays: 7,
+      },
+    }
+
+    scanMock.mockResolvedValue([config])
+    executeToMock.mockResolvedValue({ status: 'completed' })
+    applyRetentionMock.mockResolvedValue({ status: 'failed', error: 'Delete denied' })
+
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('process.exit called')
+    }) as never)
+
+    const { runCli } = await import('./run.js')
+
+    await expect(runCli(['run', '--config', 'backup.yaml'])).rejects.toThrow('process.exit called')
 
     exitSpy.mockRestore()
   })

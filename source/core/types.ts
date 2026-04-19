@@ -70,7 +70,7 @@ export interface S3Config {
   accessKeyId: string
   /** 私有密钥（明文或 ${ENV_VAR}）*/
   secretAccessKey: string
-  /** 路径前缀模板 */
+  /** 备份路径前缀（固定前缀，不支持模板） */
   pathPrefix?: string
   /** 是否使用 Path Style（MinIO 需要）*/
   forcePathStyle?: boolean
@@ -82,16 +82,6 @@ export interface S3Config {
 export interface LocalConfig {
   /** 存储路径 */
   path: string
-}
-
-/**
- * 密钥引用
- */
-export interface SecretRef {
-  /** 可选类型标记，仅保留 env */
-  type?: 'env'
-  /** 环境变量名 */
-  envVar?: string
 }
 
 /**

@@ -8,6 +8,7 @@ import { createPostgreSQLDriver } from '@adapters/database/postgresql'
 import { createS3StorageDriver } from '@adapters/storage/s3'
 import { createBackupExecutor } from '@core/executor'
 import { createLogger } from '@core/logger'
+import { createRetentionExecutor } from '@retention/executor'
 import type { DatabaseDriver, StorageDriver } from '@core/interfaces'
 import type { ResolvedConfig, BackupConfig, RestoreInput } from '@core/types'
 
@@ -112,14 +113,23 @@ async function runCommand(options: CliOptions): Promise<void> {
 
     for (const config of resolvedConfigs) {
       const executor = createBackupExecutor({
-        databaseDriverFactory: { create: createDatabaseDriver },
         storageDriverFactory: { create: createStorageDriver },
+        databaseDriverFactory: { create: createDatabaseDriver },
       })
 
       const result = await executor.executeTo(config, undefined, options.dryRun)
 
-      if (options.output === 'json') {
-        console.log(JSON.stringify(result, null, 2))
+      if (result.status === 'failed') {
+        process.exit(1)
+      }
+
+      if (config.config.retention) {
+        const retentionExecutor = createRetentionExecutor(createStorageDriver(config))
+        const retentionResult = await retentionExecutor.applyRetention(config, { dryRun: options.dryRun })
+
+        if (retentionResult.status === 'failed') {
+          process.exit(1)
+        }
       }
     }
 

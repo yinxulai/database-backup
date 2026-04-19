@@ -69,7 +69,7 @@ describe('Core Types', () => {
           bucket: 'my-backups',
           accessKeyId: '${AWS_ACCESS_KEY_ID}',
           secretAccessKey: '${AWS_SECRET_ACCESS_KEY}',
-          pathPrefix: '{{.Database}}/{{.Date}}',
+          pathPrefix: 'backups/prod',
         },
       }
 

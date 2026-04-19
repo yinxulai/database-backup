@@ -141,12 +141,17 @@ destination:
     bucket: string
     accessKeyId: string        # plain text or ${AWS_ACCESS_KEY_ID}
     secretAccessKey: string    # plain text or ${AWS_SECRET_ACCESS_KEY}
-    pathPrefix?: string        # Optional: "{{.Database}}/{{.Date}}"
+    pathPrefix?: string        # Optional fixed prefix, e.g. backups/prod
 
 # Retention policy (optional)
 retention:
   retentionDays: 7
 ```
+
+Generated backup objects use a stable structure under the prefix:
+
+- prefix / database type / database / YYYY / MM / DD / task-name-HH-mm-ss.sql.gz
+- retention cleanup runs automatically after backup when configured
 
 The plain top-level YAML structure is the only supported config format.
 
