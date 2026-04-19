@@ -85,6 +85,21 @@ describe('S3StorageDriver', () => {
       expect(typeof driver.delete).toBe('function')
       expect(typeof driver.list).toBe('function')
     })
+
+    it('should configure the S3 client for streaming uploads', async () => {
+      const driver = new S3StorageDriver(mockConfig)
+      const internalDriver = driver as unknown as {
+        client: {
+          config: {
+            requestChecksumCalculation?: () => Promise<string>
+            responseChecksumValidation?: () => Promise<string>
+          }
+        }
+      }
+
+      await expect(internalDriver.client.config.requestChecksumCalculation?.()).resolves.toBe('WHEN_REQUIRED')
+      await expect(internalDriver.client.config.responseChecksumValidation?.()).resolves.toBe('WHEN_REQUIRED')
+    })
   })
 
   describe('upload', () => {

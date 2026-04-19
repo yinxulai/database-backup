@@ -37,6 +37,8 @@ export class S3StorageDriver implements StorageDriver {
         secretAccessKey: config.secretAccessKey,
       },
       forcePathStyle: config.forcePathStyle,
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+      responseChecksumValidation: 'WHEN_REQUIRED',
     })
     this.logger = logger ?? createLogger()
   }
