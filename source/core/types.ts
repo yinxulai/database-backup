@@ -220,8 +220,6 @@ export interface ResolvedS3Config {
  * 恢复选项
  */
 export interface RestoreOptions {
-  /** 备份文件 key（存储中的路径）*/
-  backupKey: string
   /** 目标数据库名称 */
   database: string
   /** 要恢复的表（支持 schema.table；空 = 全部）*/
@@ -230,10 +228,6 @@ export interface RestoreOptions {
   clean?: boolean
   /** 创建数据库（如果不存在）*/
   create?: boolean
-  /** 备份是否为 gzip 压缩 */
-  compressed?: boolean
-  /** 备份格式: 'plain' (pg_dump plain SQL) | 'custom' (pg_dump -Fc) */
-  format?: 'plain' | 'custom'
 }
 
 /**
@@ -295,4 +289,25 @@ export interface RestoreInput {
   clean?: boolean
   /** 创建数据库 */
   create?: boolean
+}
+
+export type BackupErrorCode =
+  | 'CONNECTION_FAILED'
+  | 'DUMP_FAILED'
+  | 'CHECKSUM_FAILED'
+  | 'UPLOAD_FAILED'
+  | 'CONFIG_INVALID'
+  | 'SECRET_RESOLVE_FAILED'
+  | 'UNKNOWN'
+
+export class BackupExecutionError extends Error {
+  constructor(
+    public readonly code: BackupErrorCode,
+    public readonly taskName: string,
+    message: string,
+    public readonly cause?: Error
+  ) {
+    super(message)
+    this.name = 'BackupExecutionError'
+  }
 }

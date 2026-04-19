@@ -2,7 +2,7 @@
  * Executor 单元测试
  */
 
-import { Readable } from 'node:stream'
+import { writeFile } from 'node:fs/promises'
 import { describe, it, expect, beforeEach } from 'vitest'
 import type { DatabaseDriver, StorageDriver, StorageObject } from './interfaces.js'
 import type { DumpOptions, ResolvedConfig } from './types.js'
@@ -20,11 +20,11 @@ class MockDatabaseDriver implements DatabaseDriver {
     return Promise.resolve(this.connected)
   }
 
-  dump(options: DumpOptions): Promise<Readable> {
+  async dump(options: DumpOptions, destFilePath: string): Promise<void> {
     this.dumpCalled = true
     this.dumpCallCount += 1
     this.lastDumpOptions = options
-    return Promise.resolve(Readable.from(['mock dump data']))
+    await writeFile(destFilePath, 'mock dump data')
   }
 
   close(): Promise<void> {
@@ -48,15 +48,26 @@ class MockDatabaseDriver implements DatabaseDriver {
 class MockStorageDriver implements StorageDriver {
   readonly type = 's3'
   private uploadedKey: string | null = null
+  private failUploadCount = 0
 
-  upload(_data: Readable, key: string): Promise<{ key: string; size: number; etag: string; duration: number }> {
+  async upload(_filePath: string, key: string, contentLength: number): Promise<{ key: string; size: number; etag: string; duration: number }> {
     this.uploadedKey = key
-    return Promise.resolve({
+
+    if (this.failUploadCount > 0) {
+      this.failUploadCount -= 1
+      throw new Error('Transient upload failure')
+    }
+
+    return {
       key,
-      size: 1024,
+      size: contentLength,
       etag: 'mock-etag',
       duration: 1,
-    })
+    }
+  }
+
+  failNextUploads(count: number): void {
+    this.failUploadCount = count
   }
 
   delete(_key: string): Promise<void> {
@@ -194,6 +205,16 @@ describe('DefaultBackupExecutor', () => {
     expect(mockDbDriver.getDumpCallCount()).toBe(1)
   })
 
+  it('should not dump again when an upload retry succeeds after a transient storage failure', async () => {
+    const config = createMockConfig()
+    mockStorageDriver.failNextUploads(1)
+
+    const result = await executor.execute(config)
+
+    expect(result.status).toBe('completed')
+    expect(mockDbDriver.getDumpCallCount()).toBe(1)
+  })
+
   it('should call storage upload', async () => {
     const config = createMockConfig()
     const result = await executor.execute(config)
@@ -238,7 +259,7 @@ describe('DefaultBackupExecutor', () => {
 
   it('should return dry-run-completed without uploading', async () => {
     const config = createMockConfig()
-    const result = await executor.executeTo(config, undefined, true)
+    const result = await executor.execute(config, undefined, true)
 
     expect(result.status).toBe('dry-run-completed')
     expect(result.checksum).toBeDefined()
@@ -247,7 +268,7 @@ describe('DefaultBackupExecutor', () => {
 
   it('should fail when the dump stream is empty', async () => {
     const emptyDriver = new MockDatabaseDriver()
-    emptyDriver.dump = () => Promise.resolve(Readable.from([]))
+    emptyDriver.dump = async (_opts: DumpOptions, destFilePath: string) => { await writeFile(destFilePath, '') }
 
     const localExecutor = new DefaultBackupExecutor({
       databaseDriverFactory: { create: () => emptyDriver },
@@ -255,7 +276,7 @@ describe('DefaultBackupExecutor', () => {
     })
 
     const config = createMockConfig()
-    const result = await localExecutor.executeTo(config, undefined, true)
+    const result = await localExecutor.execute(config, undefined, true)
 
     expect(result.status).toBe('failed')
     expect(result.error).toContain('no data')

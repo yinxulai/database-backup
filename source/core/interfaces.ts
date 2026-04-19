@@ -1,5 +1,5 @@
+import type { Readable } from 'node:stream'
 
-import type { Readable, Writable } from 'node:stream'
 import type {
   BackupConfig,
   BackupResult,
@@ -10,9 +10,6 @@ import type {
   RestoreInput,
   RestoreResult,
 } from './types.js'
-
-// Re-export BackupError so implementations can use it
-export { BackupExecutionError as BackupError } from './executor.js'
 
 export interface DatabaseDriver {
   /** 数据库类型 */
@@ -25,18 +22,18 @@ export interface DatabaseDriver {
   testConnection(): Promise<boolean>
 
   /**
-   * 执行数据库备份
+   * 执行数据库备份，将结果直接写入到指定文件
    * @param options 备份选项
-   * @returns 备份数据流
+   * @param destFilePath 目标文件路径（由 executor 提供的临时文件）
    */
-  dump(options: DumpOptions): Promise<Readable>
+  dump(options: DumpOptions, destFilePath: string): Promise<void>
 
   /**
-   * 执行数据库恢复
+   * 执行数据库恢复，从指定文件读取备份数据
    * @param options 恢复选项
-   * @returns 恢复数据写入流（写入到数据库）
+   * @param srcFilePath 备份文件路径（由 executor 提供的已下载文件）
    */
-  restore(options: RestoreOptions): Promise<Writable>
+  restore(options: RestoreOptions, srcFilePath: string): Promise<void>
 
   /**
    * 关闭连接
@@ -49,12 +46,13 @@ export interface StorageDriver {
   readonly type: string
 
   /**
-   * 上传数据
-   * @param data 数据流
+   * 上传已落盘的备份文件
+   * @param filePath 临时文件路径
    * @param key 存储路径
+   * @param contentLength 文件大小（字节）
    * @returns 上传结果
    */
-  upload(data: Readable, key: string): Promise<UploadResult>
+  upload(filePath: string, key: string, contentLength: number): Promise<UploadResult>
 
   /**
    * 下载数据
@@ -147,31 +145,7 @@ export interface ResultStore {
 }
 
 export interface BackupExecutor {
-  /**
-   * 执行备份。
-   * 约定：执行器内部负责捕获业务错误并转换为 failed 结果；
-   * 调用方只根据结果决定是否退出、是否继续后续流程。
-   * @param config 已解析的配置
-   * @returns 备份结果
-   */
-  execute(config: ResolvedConfig): Promise<BackupResult>
-
-  /**
-   * 执行备份并指定输出
-   * @param config 已解析的配置
-   * @param outputKey 指定的存储 key（可选）
-   * @param dryRun 是否为 dry-run 模式（只验证不上传）
-   * @returns 备份结果
-   */
-  executeTo(config: ResolvedConfig, outputKey?: string, dryRun?: boolean): Promise<BackupResult>
-
-  /**
-   * 执行数据库恢复。
-   * 同样由执行器内部收敛错误并返回结果对象。
-   * @param config 已解析的配置
-   * @param input 恢复输入选项
-   * @returns 恢复结果
-   */
+  execute(config: ResolvedConfig, outputKey?: string, dryRun?: boolean): Promise<BackupResult>
   restore(config: ResolvedConfig, input: RestoreInput): Promise<RestoreResult>
 }
 
@@ -185,27 +159,9 @@ export interface BackupExecutorOptions {
 }
 
 export interface DatabaseDriverFactory {
-  /**
-   * 创建数据库驱动
-   * @param config 已解析的配置
-   * @returns 数据库驱动实例
-   */
   create(config: ResolvedConfig): DatabaseDriver
 }
 
 export interface StorageDriverFactory {
-  /**
-   * 创建存储驱动
-   * @param config 已解析的配置
-   * @returns 存储驱动实例
-   */
   create(config: ResolvedConfig): StorageDriver
 }
-
-export type BackupErrorCode =
-  | 'CONNECTION_FAILED'
-  | 'DUMP_FAILED'
-  | 'UPLOAD_FAILED'
-  | 'CONFIG_INVALID'
-  | 'SECRET_RESOLVE_FAILED'
-  | 'UNKNOWN'

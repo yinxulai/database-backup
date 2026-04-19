@@ -1,19 +1,25 @@
 
-import { randomUUID } from 'node:crypto'
-import { createHash } from 'node:crypto'
-import { Transform, type Readable } from 'node:stream'
+import { randomUUID, createHash } from 'node:crypto'
+import { createReadStream, createWriteStream } from 'node:fs'
+import { stat, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { pipeline } from 'node:stream/promises'
+import { type Readable } from 'node:stream'
 import type {
   ResolvedConfig,
   BackupResult,
   RestoreInput,
   RestoreResult,
   DumpOptions,
-  UploadResult,
+} from './types.js'
+import {
+  BackupExecutionError,
+  type BackupErrorCode,
 } from './types.js'
 import type {
   BackupExecutor,
   BackupExecutorOptions,
-  BackupErrorCode,
   DatabaseDriver,
   StorageDriver,
 } from './interfaces.js'
@@ -25,17 +31,26 @@ const DEFAULT_RETRY_CONFIG = {
   backoffMultiplier: 2,
 }
 
-export class BackupExecutionError extends Error {
-  constructor(
-    public readonly code: BackupErrorCode,
-    public readonly taskName: string,
-    message: string,
-    public readonly cause?: Error
-  ) {
-    super(message)
-    this.name = 'BackupExecutionError'
-  }
+export { BackupExecutionError } from './types.js'
+
+// ─── Internal types ────────────────────────────────────────────────────────────
+
+interface StagedFile {
+  tempDir: string
+  filePath: string
+  size: number
 }
+
+interface BackupContext {
+  log: Logger
+  config: ResolvedConfig
+  result: BackupResult
+  dbDriver: DatabaseDriver
+  storageDriver: StorageDriver
+  stagedFile?: StagedFile
+}
+
+// ─── Executor ──────────────────────────────────────────────────────────────────
 
 export class DefaultBackupExecutor implements BackupExecutor {
   private retryConfig = DEFAULT_RETRY_CONFIG
@@ -48,150 +63,37 @@ export class DefaultBackupExecutor implements BackupExecutor {
     this.logger = logger ?? createLogger()
   }
 
-  /**
-   * Execute backup
-   */
-  async execute(config: ResolvedConfig): Promise<BackupResult> {
-    return this.executeTo(config)
-  }
+  // ── Public API ─────────────────────────────────────────────────────────────
 
-  /**
-   * Execute backup with custom output key
-   * @param dryRun If true, validates dump without uploading
-   */
-  async executeTo(config: ResolvedConfig, outputKey?: string, dryRun = false): Promise<BackupResult> {
-    const requestId = randomUUID()
-    const log = this.logger.child(requestId)
-
-    const result: BackupResult = {
-      id: randomUUID(),
-      taskName: config.config.name,
-      status: 'running',
-      startTime: new Date(),
-    }
-
-    const { source, destination } = config.config
-    const databaseName = source.database
-
-    // Create database and storage drivers
-    const dbDriver = this.options.databaseDriverFactory.create(config)
-    const storageDriver = this.options.storageDriverFactory.create(config)
+  async execute(config: ResolvedConfig, outputKey?: string, dryRun = false): Promise<BackupResult> {
+    const ctx = this.initBackupContext(config, outputKey)
 
     try {
-      // 1. Test connection
-      log.info('Testing database connection', { type: source.type, database: databaseName })
-      const connected = await dbDriver.testConnection()
-      if (!connected) {
-        throw new BackupExecutionError('CONNECTION_FAILED', config.config.name, 'Database connection failed')
-      }
-      log.info('Database connection successful')
+      await this.stageConnect(ctx)
+      await this.stageDump(ctx)
+      await this.stageChecksum(ctx)
 
-      // 2. Generate file key
-      const fileKey = outputKey ?? this.generateFileKey(config, result.startTime)
-      result.fileKey = fileKey
-      result.tables = source.tables ?? []
-
-      // 3. Execute dump
-      log.info('Starting database dump', { database: databaseName, tables: result.tables })
-      const tables = source.tables ?? []
-      const compression: 'gzip' | 'none' | undefined = destination.type === 's3' ? 'gzip' : undefined
-      const dumpOptions = {
-        database: databaseName,
-        tables,
-        compression,
-      }
-      // 4. Dry-run: validate without uploading
       if (dryRun) {
-        const dumpStream = await this.withRetry(
-          () => dbDriver.dump(dumpOptions),
-          'DUMP_FAILED',
-          log
-        )
-        log.info('Database dump stream opened')
-        log.info('Computing checksum')
-        const checksum = await this.computeChecksum(dumpStream)
-        result.checksum = checksum
-        log.info('Checksum computed', { checksum })
-
-        result.status = 'dry-run-completed'
-        result.endTime = new Date()
-        result.duration = Math.round((result.endTime.getTime() - result.startTime.getTime()) / 1000)
-        log.info('Dry-run completed: dump is valid', { checksum, key: fileKey })
-        return result
+        ctx.log.info('Dry-run completed: dump is valid', {
+          key: ctx.result.fileKey,
+          checksum: ctx.result.checksum,
+          size: ctx.result.size,
+        })
+        return this.finalizeBackup(ctx, 'dry-run-completed')
       }
 
-      // 5. Upload to storage in a single streaming pass
-      log.info('Uploading backup', { destination: destination.type, key: fileKey })
-      const uploadResult = await this.withRetry(
-        () => this.uploadWithChecksum(dbDriver, storageDriver, dumpOptions, fileKey, log),
-        'UPLOAD_FAILED',
-        log
-      )
-
-      result.size = uploadResult.size
-      result.checksum = uploadResult.checksum
-      log.info('Checksum computed', { checksum: uploadResult.checksum })
-      result.status = 'completed'
-      result.endTime = new Date()
-      result.duration = Math.round((result.endTime.getTime() - result.startTime.getTime()) / 1000)
-
-      log.info('Backup completed', {
-        key: uploadResult.key,
-        size: uploadResult.size,
-        duration: result.duration
-      })
-
-      // 8. Save result
-      if (this.options.resultStore) {
-        try {
-          await this.options.resultStore.save(result)
-        } catch (saveError) {
-          log.warn('Failed to save backup result', {
-            error: saveError instanceof Error ? saveError.message : String(saveError),
-          })
-        }
-      }
-
-      return result
+      await this.stageUpload(ctx)
+      return this.finalizeBackup(ctx, 'completed')
 
     } catch (err) {
-      result.status = 'failed'
-      result.endTime = new Date()
-      result.duration = Math.round((result.endTime.getTime() - result.startTime.getTime()) / 1000)
-      result.error = err instanceof Error ? err.message : String(err)
-
-      log.error('Backup failed', { error: result.error, code: (err as BackupExecutionError).code })
-
-      // Save failed result
-      if (this.options.resultStore) {
-        try {
-          await this.options.resultStore.save(result)
-        } catch (saveError) {
-          log.warn('Failed to save backup result', {
-            error: saveError instanceof Error ? saveError.message : String(saveError),
-          })
-        }
-      }
-
-      return result
-
+      return this.finalizeBackup(ctx, 'failed', err)
     } finally {
-      try {
-        await dbDriver.close()
-      } catch (closeError) {
-        log.warn('Failed to close database driver', {
-          error: closeError instanceof Error ? closeError.message : String(closeError),
-        })
-      }
+      await this.cleanupBackup(ctx)
     }
   }
 
-  /**
-   * Execute restore
-   */
   async restore(config: ResolvedConfig, input: RestoreInput): Promise<RestoreResult> {
-    const requestId = randomUUID()
-    const log = this.logger.child(requestId)
+    const log = this.logger.child(randomUUID())
 
     const result: RestoreResult = {
       id: randomUUID(),
@@ -201,83 +103,51 @@ export class DefaultBackupExecutor implements BackupExecutor {
       fileKey: input.backupKey,
     }
 
-    // Create database and storage drivers
     const dbDriver = this.options.databaseDriverFactory.create(config)
     const storageDriver = this.options.storageDriverFactory.create(config)
+    let tempDir: string | undefined
 
     try {
-      // 1. Determine the target database and format from backup key
       const backupInfo = this.parseBackupKey(input.backupKey)
       const targetDatabase = input.database ?? backupInfo.database ?? config.config.source.database
 
-      log.info('Starting restore', {
-        backupKey: input.backupKey,
-        targetDatabase,
-        compressed: input.backupKey.endsWith('.gz'),
-      })
+      log.info('Starting restore', { backupKey: input.backupKey, targetDatabase })
 
-      // 2. Download backup from storage
+      // Stage 1: Download backup file to a temp location
       log.info('Downloading backup from storage')
+      tempDir = await mkdtemp(join(tmpdir(), 'database-restore-'))
+      const ext = input.backupKey.endsWith('.gz') ? '.sql.gz' : '.sql'
+      const localFilePath = join(tempDir, `restore${ext}`)
       const backupStream = await storageDriver.download(input.backupKey)
+      await this.downloadToFile(backupStream, localFilePath)
+      log.info('Backup downloaded', { localFilePath })
 
-      // 3. Decompress if gzip
-      let restoreStream: Readable = backupStream
-      if (input.backupKey.endsWith('.gz')) {
-        log.info('Decompressing backup')
-        const { spawn: spawnGzip } = await import('node:child_process')
-        const gunzip = spawnGzip('gunzip', ['-c'], { stdio: ['pipe', 'pipe', 'pipe'] })
-        backupStream.pipe(gunzip.stdin)
-        gunzip.stderr.on('data', (data) => {
-          console.error(`[gunzip] ${data.toString().trim()}`)
-        })
-        restoreStream = gunzip.stdout
-      }
-
-      // 4. Restore to database
+      // Stage 2: Restore from the local file
       log.info('Restoring database', { database: targetDatabase })
-
       const restoreOptions = {
-        backupKey: input.backupKey,
         database: targetDatabase,
         tables: input.tables,
         clean: input.clean,
         create: input.create,
-        compressed: input.backupKey.endsWith('.gz'),
-        format: (input.backupKey.includes('.sql.gz') ? 'plain' : 'custom') as 'plain' | 'custom',
       }
 
-      const restoreInput = await dbDriver.restore(restoreOptions)
-      restoreStream.pipe(restoreInput)
+      await dbDriver.restore(restoreOptions, localFilePath)
 
-      // Wait for restore to complete
-      await new Promise<void>((resolve, reject) => {
-        restoreInput.on('finish', resolve)
-        restoreInput.on('error', reject)
-        restoreStream.on('error', reject)
-      })
-
-      result.status = 'completed'
-      result.endTime = new Date()
-      result.duration = Math.round((result.endTime.getTime() - result.startTime.getTime()) / 1000)
-
-      log.info('Restore completed', {
-        backupKey: input.backupKey,
-        duration: result.duration
-      })
-
-      return result
+      return this.finalizeRestore(result, log, 'completed')
 
     } catch (err) {
-      result.status = 'failed'
-      result.endTime = new Date()
-      result.duration = Math.round((result.endTime.getTime() - result.startTime.getTime()) / 1000)
-      result.error = err instanceof Error ? err.message : String(err)
-
-      log.error('Restore failed', { error: result.error })
-
-      return result
-
+      return this.finalizeRestore(result, log, 'failed', err)
     } finally {
+      if (tempDir) {
+        try {
+          await rm(tempDir, { recursive: true, force: true })
+        } catch (cleanupError) {
+          log.warn('Failed to remove restore temp files', {
+            error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+          })
+        }
+      }
+
       try {
         await dbDriver.close()
       } catch (closeError) {
@@ -288,9 +158,272 @@ export class DefaultBackupExecutor implements BackupExecutor {
     }
   }
 
-  /**
-   * Parse backup key to extract metadata
-   */
+  // ── Backup stages ──────────────────────────────────────────────────────────
+
+  private async stageConnect(ctx: BackupContext): Promise<void> {
+    const { source } = ctx.config.config
+    ctx.log.info('Testing database connection', { type: source.type, database: source.database })
+
+    const connected = await ctx.dbDriver.testConnection()
+    if (!connected) {
+      throw new BackupExecutionError('CONNECTION_FAILED', ctx.result.taskName, 'Database connection failed')
+    }
+
+    ctx.log.info('Database connection successful')
+  }
+
+  private async stageDump(ctx: BackupContext): Promise<void> {
+    const { source, destination } = ctx.config.config
+    const dumpOptions: DumpOptions = {
+      database: source.database,
+      tables: source.tables ?? [],
+      compression: destination.type === 's3' ? 'gzip' : undefined,
+    }
+
+    ctx.result.tables = source.tables ?? []
+
+    ctx.stagedFile = await this.withRetry(
+      () => this.dumpToTempFile(ctx.dbDriver, dumpOptions, ctx.log),
+      'DUMP_FAILED',
+      ctx.log
+    )
+
+    ctx.result.size = ctx.stagedFile.size
+  }
+
+  private async stageChecksum(ctx: BackupContext): Promise<void> {
+    const { filePath } = ctx.stagedFile!
+
+    const checksum = await this.withRetry(
+      () => this.computeFileChecksum(filePath),
+      'CHECKSUM_FAILED',
+      ctx.log
+    )
+
+    ctx.result.checksum = checksum
+    ctx.log.info('Checksum computed', { checksum })
+  }
+
+  private async stageUpload(ctx: BackupContext): Promise<void> {
+    const { filePath, size } = ctx.stagedFile!
+    const fileKey = ctx.result.fileKey!
+
+    ctx.log.info('Uploading backup', {
+      destination: ctx.config.config.destination.type,
+      key: fileKey,
+      size,
+    })
+
+    const uploadResult = await this.withRetry(
+      () => ctx.storageDriver.upload(filePath, fileKey, size),
+      'UPLOAD_FAILED',
+      ctx.log
+    )
+
+    ctx.log.info('Upload completed', { key: uploadResult.key, size: uploadResult.size })
+  }
+
+  // ── Lifecycle helpers ──────────────────────────────────────────────────────
+
+  private initBackupContext(config: ResolvedConfig, outputKey?: string): BackupContext {
+    const log = this.logger.child(randomUUID())
+
+    return {
+      log,
+      config,
+      result: {
+        id: randomUUID(),
+        taskName: config.config.name,
+        status: 'running',
+        startTime: new Date(),
+        fileKey: outputKey ?? this.generateFileKey(config),
+      },
+      dbDriver: this.options.databaseDriverFactory.create(config),
+      storageDriver: this.options.storageDriverFactory.create(config),
+    }
+  }
+
+  private async finalizeBackup(
+    ctx: BackupContext,
+    status: BackupResult['status'],
+    err?: unknown
+  ): Promise<BackupResult> {
+    const endTime = new Date()
+    ctx.result.status = status
+    ctx.result.endTime = endTime
+    ctx.result.duration = Math.round((endTime.getTime() - ctx.result.startTime.getTime()) / 1000)
+
+    if (err != null) {
+      ctx.result.error = err instanceof Error ? err.message : String(err)
+      ctx.log.error('Backup failed', {
+        error: ctx.result.error,
+        code: (err as BackupExecutionError).code,
+      })
+    } else if (status === 'completed') {
+      ctx.log.info('Backup completed', {
+        key: ctx.result.fileKey,
+        size: ctx.result.size,
+        duration: ctx.result.duration,
+      })
+    }
+
+    if (status !== 'dry-run-completed') {
+      await this.persistResult(ctx.result, ctx.log)
+    }
+
+    return ctx.result
+  }
+
+  private finalizeRestore(
+    result: RestoreResult,
+    log: Logger,
+    status: RestoreResult['status'],
+    err?: unknown
+  ): RestoreResult {
+    const endTime = new Date()
+    result.status = status
+    result.endTime = endTime
+    result.duration = Math.round((endTime.getTime() - result.startTime.getTime()) / 1000)
+
+    if (err != null) {
+      result.error = err instanceof Error ? err.message : String(err)
+      log.error('Restore failed', { error: result.error })
+    } else {
+      log.info('Restore completed', { backupKey: result.fileKey, duration: result.duration })
+    }
+
+    return result
+  }
+
+  private async persistResult(result: BackupResult, log: Logger): Promise<void> {
+    if (!this.options.resultStore) return
+
+    try {
+      await this.options.resultStore.save(result)
+    } catch (saveError) {
+      log.warn('Failed to persist backup result', {
+        error: saveError instanceof Error ? saveError.message : String(saveError),
+      })
+    }
+  }
+
+  private async cleanupBackup(ctx: BackupContext): Promise<void> {
+    if (ctx.stagedFile) {
+      try {
+        await rm(ctx.stagedFile.tempDir, { recursive: true, force: true })
+      } catch (cleanupError) {
+        ctx.log.warn('Failed to remove temporary backup files', {
+          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        })
+      }
+    }
+
+    try {
+      await ctx.dbDriver.close()
+    } catch (closeError) {
+      ctx.log.warn('Failed to close database driver', {
+        error: closeError instanceof Error ? closeError.message : String(closeError),
+      })
+    }
+  }
+
+  // ── File operations ────────────────────────────────────────────────────────
+
+  private async dumpToTempFile(
+    dbDriver: DatabaseDriver,
+    dumpOptions: DumpOptions,
+    log: Logger
+  ): Promise<StagedFile> {
+    const tempDir = await mkdtemp(join(tmpdir(), 'database-backup-'))
+    const extension = dumpOptions.compression === 'gzip' ? '.sql.gz' : '.sql'
+    const filePath = join(tempDir, `${randomUUID()}${extension}`)
+
+    try {
+      log.info('Starting database dump', { database: dumpOptions.database })
+      await dbDriver.dump(dumpOptions, filePath)
+
+      const { size } = await stat(filePath)
+      if (size === 0) {
+        throw new Error('Database dump produced no data')
+      }
+
+      log.info('Dump completed', { size, filePath })
+      return { tempDir, filePath, size }
+    } catch (error) {
+      await rm(tempDir, { recursive: true, force: true })
+      throw error
+    }
+  }
+
+  private async downloadToFile(stream: Readable, destFilePath: string): Promise<void> {
+    await pipeline(stream, createWriteStream(destFilePath))
+  }
+
+  private async computeFileChecksum(filePath: string): Promise<string> {
+    const hash = createHash('sha256')
+
+    for await (const chunk of createReadStream(filePath)) {
+      hash.update(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+    }
+
+    return `sha256:${hash.digest('hex')}`
+  }
+
+  // ── Retry ──────────────────────────────────────────────────────────────────
+
+  private async withRetry<T>(
+    fn: () => Promise<T>,
+    errorCode: BackupErrorCode,
+    log: Logger
+  ): Promise<T> {
+    let lastError: Error | undefined
+    let delay = this.retryConfig.initialDelayMs
+
+    for (let attempt = 1; attempt <= this.retryConfig.maxAttempts; attempt++) {
+      try {
+        return await fn()
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err))
+
+        if (attempt < this.retryConfig.maxAttempts) {
+          log.warn('Retrying operation', {
+            delay,
+            attempt,
+            maxAttempts: this.retryConfig.maxAttempts,
+            error: lastError.message,
+          })
+          await this.sleep(delay)
+          delay *= this.retryConfig.backoffMultiplier
+        }
+      }
+    }
+
+    throw new BackupExecutionError(errorCode, '', lastError?.message ?? 'Unknown error', lastError)
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms))
+  }
+
+  // ── Key generation ─────────────────────────────────────────────────────────
+
+  private generateFileKey(config: ResolvedConfig, now = new Date()): string {
+    const { source } = config.config
+    const databaseName = this.sanitizePathSegment(source.database)
+    const taskName = this.sanitizePathSegment(config.config.name)
+    const [date] = now.toISOString().split('T')
+    const time = now.toTimeString().split(' ')[0].replace(/:/g, '-')
+    const extension = config.config.destination.type === 's3' ? 'sql.gz' : 'sql'
+
+    return this.joinPathSegments(
+      this.normalizePathPrefix(config.s3?.pathPrefix),
+      source.type,
+      databaseName,
+      date,
+      `${taskName}-${time}.${extension}`,
+    )
+  }
+
   private parseBackupKey(key: string): { database?: string; type?: string } {
     const segments = key.split('/').filter(Boolean)
     const flatDatePattern = /^\d{4}-\d{2}-\d{2}$/
@@ -325,26 +458,6 @@ export class DefaultBackupExecutor implements BackupExecutor {
     }
   }
 
-  /**
-   * Generate file key for backup
-   */
-  private generateFileKey(config: ResolvedConfig, now = new Date()): string {
-    const { source } = config.config
-    const databaseName = this.sanitizePathSegment(source.database)
-    const taskName = this.sanitizePathSegment(config.config.name)
-    const [date] = now.toISOString().split('T')
-    const time = now.toTimeString().split(' ')[0].replace(/:/g, '-')
-    const extension = config.config.destination.type === 's3' ? 'sql.gz' : 'sql'
-
-    return this.joinPathSegments(
-      this.normalizePathPrefix(config.s3?.pathPrefix),
-      source.type,
-      databaseName,
-      date,
-      `${taskName}-${time}.${extension}`,
-    )
-  }
-
   private normalizePathPrefix(prefix?: string): string | undefined {
     const normalized = prefix?.replace(/^\/+|\/+$/g, '').trim()
     return normalized ? normalized : undefined
@@ -365,125 +478,7 @@ export class DefaultBackupExecutor implements BackupExecutor {
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '') || 'backup'
   }
-
-  /**
-   * Compute SHA256 checksum
-   */
-  private async computeChecksum(stream: Readable): Promise<string> {
-    const { completion } = this.createChecksumTrackingStream(stream)
-    const { checksum } = await completion
-    return checksum
-  }
-
-  private async uploadWithChecksum(
-    dbDriver: DatabaseDriver,
-    storageDriver: StorageDriver,
-    dumpOptions: DumpOptions,
-    fileKey: string,
-    log: Logger
-  ): Promise<UploadResult & { checksum: string }> {
-    const dumpStream = await this.withRetry(
-      () => dbDriver.dump(dumpOptions),
-      'DUMP_FAILED',
-      log
-    )
-    log.info('Database dump stream opened')
-
-    const tracked = this.createChecksumTrackingStream(dumpStream)
-
-    try {
-      const uploadResult = await storageDriver.upload(tracked.stream, fileKey)
-      const { checksum, size } = await tracked.completion
-
-      return {
-        ...uploadResult,
-        size,
-        checksum,
-      }
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err))
-      tracked.stream.destroy(error)
-      throw error
-    }
-  }
-
-  private createChecksumTrackingStream(stream: Readable): {
-    stream: Readable
-    completion: Promise<{ checksum: string; size: number }>
-  } {
-    const hash = createHash('sha256')
-    let totalBytes = 0
-
-    const trackedStream = new Transform({
-      transform(chunk, _encoding, callback) {
-        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-        totalBytes += buffer.length
-        hash.update(buffer)
-        callback(null, buffer)
-      },
-    })
-
-    const completion = new Promise<{ checksum: string; size: number }>((resolve, reject) => {
-      trackedStream.on('finish', () => {
-        if (totalBytes === 0) {
-          reject(new Error('Database dump produced no data'))
-          return
-        }
-
-        resolve({
-          checksum: `sha256:${hash.digest('hex')}`,
-          size: totalBytes,
-        })
-      })
-      trackedStream.on('error', reject)
-    })
-
-    stream.on('error', (err) => trackedStream.destroy(err))
-    stream.pipe(trackedStream)
-
-    return { stream: trackedStream, completion }
-  }
-
-  /**
-   * Execute with retry
-   */
-  private async withRetry<T>(
-    fn: () => Promise<T>,
-    errorCode: BackupErrorCode,
-    log: Logger
-  ): Promise<T> {
-    let lastError: Error | undefined
-    let delay = this.retryConfig.initialDelayMs
-
-    for (let attempt = 1; attempt <= this.retryConfig.maxAttempts; attempt++) {
-      try {
-        return await fn()
-      } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err))
-        
-        if (attempt < this.retryConfig.maxAttempts) {
-          log.warn('Retrying operation', {
-            delay,
-            attempt,
-            maxAttempts: this.retryConfig.maxAttempts
-          })
-          await this.sleep(delay)
-          delay *= this.retryConfig.backoffMultiplier
-        }
-      }
-    }
-
-    throw new BackupExecutionError(errorCode, '', lastError?.message ?? 'Unknown error', lastError)
-  }
-
-  /**
-   * Sleep
-   */
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms))
-  }
 }
-
 export function createBackupExecutor(options: BackupExecutorOptions, logger?: Logger): BackupExecutor {
   return new DefaultBackupExecutor(options, logger)
 }

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BackupConfig } from '../core/types.js'
 
 const scanMock = vi.fn()
-const executeToMock = vi.fn()
+const executeMock = vi.fn()
 const applyRetentionMock = vi.fn()
 
 vi.mock('@core/scanner', () => ({
@@ -13,7 +13,7 @@ vi.mock('@core/scanner', () => ({
 
 vi.mock('@core/executor', () => ({
   createBackupExecutor: () => ({
-    executeTo: executeToMock,
+    execute: executeMock,
   }),
 }))
 
@@ -30,7 +30,7 @@ describe('runCli', () => {
     delete process.env.DB_PASSWORD
     delete process.env.AWS_ACCESS_KEY_ID
     delete process.env.AWS_SECRET_ACCESS_KEY
-    executeToMock.mockResolvedValue({ status: 'dry-run-completed' })
+    executeMock.mockResolvedValue({ status: 'dry-run-completed' })
     applyRetentionMock.mockResolvedValue({ status: 'completed' })
   })
 
@@ -65,9 +65,9 @@ describe('runCli', () => {
     const { runCli } = await import('./run.js')
 
     await expect(runCli(['run', '--config', 'backup.yaml', '--dry-run'])).resolves.toBeUndefined()
-    expect(executeToMock).toHaveBeenCalledTimes(1)
+    expect(executeMock).toHaveBeenCalledTimes(1)
 
-    const resolvedConfig = executeToMock.mock.calls[0]?.[0]
+    const resolvedConfig = executeMock.mock.calls[0]?.[0]
     expect(resolvedConfig.connection.password).toBe('plain-db-password')
 
     exitSpy.mockRestore()
@@ -113,7 +113,7 @@ describe('runCli', () => {
 
     await expect(runCli(['run', '--config', 'backup.yaml', '--dry-run'])).resolves.toBeUndefined()
 
-    const resolvedConfig = executeToMock.mock.calls[0]?.[0]
+    const resolvedConfig = executeMock.mock.calls[0]?.[0]
     expect(resolvedConfig.connection.password).toBe('env-db-password')
     expect(resolvedConfig.s3.accessKeyId).toBe('env-access-key')
     expect(resolvedConfig.s3.secretAccessKey).toBe('env-secret-key')
@@ -151,7 +151,7 @@ describe('runCli', () => {
     }
 
     scanMock.mockResolvedValue([config])
-    executeToMock.mockResolvedValue({ status: 'completed' })
+    executeMock.mockResolvedValue({ status: 'completed' })
 
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
       throw new Error('process.exit called')
@@ -195,7 +195,7 @@ describe('runCli', () => {
     }
 
     scanMock.mockResolvedValue([config])
-    executeToMock.mockResolvedValue({ status: 'failed', error: 'Database connection failed' })
+    executeMock.mockResolvedValue({ status: 'failed', error: 'Database connection failed' })
 
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
       throw new Error('process.exit called')
@@ -244,9 +244,9 @@ describe('runCli', () => {
     const { runCli } = await import('./run.js')
 
     await expect(runCli(['run', '--config', 'backup.yaml', '--dry-run'])).resolves.toBeUndefined()
-    expect(executeToMock).toHaveBeenCalledTimes(1)
+    expect(executeMock).toHaveBeenCalledTimes(1)
 
-    const resolvedConfig = executeToMock.mock.calls[0]?.[0]
+    const resolvedConfig = executeMock.mock.calls[0]?.[0]
     expect(resolvedConfig.s3.accessKeyId).toBe('plain-access-key')
     expect(resolvedConfig.s3.secretAccessKey).toBe('plain-secret-key')
 
@@ -283,7 +283,7 @@ describe('runCli', () => {
     }
 
     scanMock.mockResolvedValue([config])
-    executeToMock.mockResolvedValue({ status: 'completed' })
+    executeMock.mockResolvedValue({ status: 'completed' })
     applyRetentionMock.mockResolvedValue({ status: 'failed', error: 'Delete denied' })
 
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {

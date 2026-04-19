@@ -5,28 +5,29 @@
  * 由于 S3 操作需要真实的 S3 服务，我们使用一个简单的 mock 实现。
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { Readable } from 'node:stream'
+import { S3Client } from '@aws-sdk/client-s3'
 
 import type { ResolvedS3Config } from '../../core/types.js'
 import type { StorageDriver, StorageObject } from '../../core/interfaces.js'
 import { S3StorageDriver } from './s3.js'
 
-const { uploadDoneMock, uploadParamsMock } = vi.hoisted(() => ({
-  uploadDoneMock: vi.fn(),
-  uploadParamsMock: vi.fn(),
-}))
+const sendMock = vi.fn()
+const tempDirs: string[] = []
 
-vi.mock('@aws-sdk/lib-storage', () => ({
-  Upload: class {
-    constructor(options: unknown) {
-      uploadParamsMock(options)
-      this.done = () => uploadDoneMock(options)
-    }
+async function createTempUploadFile(content: string): Promise<{ filePath: string; size: number }> {
+  const tempDir = await mkdtemp(join(tmpdir(), 'database-backup-test-'))
+  tempDirs.push(tempDir)
 
-    done: () => Promise<unknown>
-  },
-}))
+  const filePath = join(tempDir, 'upload.sql.gz')
+  await writeFile(filePath, content)
+
+  return { filePath, size: Buffer.byteLength(content) }
+}
 
 // 创建一个 Mock S3StorageDriver 来测试接口契约
 class MockS3StorageDriver implements StorageDriver {
@@ -40,12 +41,8 @@ class MockS3StorageDriver implements StorageDriver {
     this.config = config
   }
 
-  async upload(data: Readable, key: string): Promise<{ key: string; size: number; etag: string; duration: number }> {
-    const chunks: Buffer[] = []
-    for await (const chunk of data) {
-      chunks.push(Buffer.from(chunk))
-    }
-    const body = Buffer.concat(chunks)
+  async upload(filePath: string, key: string, _contentLength: number): Promise<{ key: string; size: number; etag: string; duration: number }> {
+    const body = await readFile(filePath)
     this.uploadedData.set(key, { data: body, size: body.length })
     return { key, size: body.length, etag: 'mock-etag', duration: 100 }
   }
@@ -93,8 +90,15 @@ describe('S3StorageDriver', () => {
   }
 
   beforeEach(() => {
-    vi.clearAllMocks()
-    uploadDoneMock.mockResolvedValue({ ETag: 'etag-123' })
+    vi.restoreAllMocks()
+    sendMock.mockReset()
+    sendMock.mockResolvedValue({ ETag: 'etag-123' })
+    vi.spyOn(S3Client.prototype, 'send').mockImplementation(sendMock as never)
+  })
+
+  afterEach(async () => {
+    await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+    vi.restoreAllMocks()
   })
 
   describe('interface compliance', () => {
@@ -107,7 +111,7 @@ describe('S3StorageDriver', () => {
       expect(typeof driver.list).toBe('function')
     })
 
-    it('should configure the S3 client for streaming uploads', async () => {
+    it('should configure the S3 client for compatible uploads', async () => {
       const driver = new S3StorageDriver(mockConfig)
       const internalDriver = driver as unknown as {
         client: {
@@ -126,9 +130,9 @@ describe('S3StorageDriver', () => {
   describe('upload', () => {
     it('should store uploaded data with correct key', async () => {
       const driver = new MockS3StorageDriver(mockConfig)
-      const data = Readable.from(['test data content'])
+      const { filePath, size } = await createTempUploadFile('test data content')
 
-      const result = await driver.upload(data, 'test-key.sql.gz')
+      const result = await driver.upload(filePath, 'test-key.sql.gz', size)
 
       expect(result.key).toBe('test-key.sql.gz')
       expect(result.size).toBeGreaterThan(0)
@@ -138,18 +142,18 @@ describe('S3StorageDriver', () => {
     it('should calculate correct size', async () => {
       const driver = new MockS3StorageDriver(mockConfig)
       const testData = 'test data content'
-      const data = Readable.from([testData])
+      const { filePath, size } = await createTempUploadFile(testData)
 
-      const result = await driver.upload(data, 'test.sql.gz')
+      const result = await driver.upload(filePath, 'test.sql.gz', size)
 
       expect(result.size).toBe(testData.length)
     })
 
     it('should return upload result with duration', async () => {
       const driver = new MockS3StorageDriver(mockConfig)
-      const data = Readable.from(['test data'])
+      const { filePath, size } = await createTempUploadFile('test data')
 
-      const result = await driver.upload(data, 'test.sql.gz')
+      const result = await driver.upload(filePath, 'test.sql.gz', size)
 
       expect(result).toHaveProperty('key')
       expect(result).toHaveProperty('size')
@@ -162,15 +166,17 @@ describe('S3StorageDriver', () => {
         ...mockConfig,
         pathPrefix: 'copilot-tests/2026-04-18',
       })
+      const { filePath, size } = await createTempUploadFile('test data')
 
       const result = await driver.upload(
-        Readable.from(['test data']),
-        'copilot-tests/2026-04-18/file.sql.gz'
+        filePath,
+        'copilot-tests/2026-04-18/file.sql.gz',
+        size
       )
 
-      expect(uploadParamsMock).toHaveBeenCalledWith(
+      expect(sendMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          params: expect.objectContaining({
+          input: expect.objectContaining({
             Key: 'copilot-tests/2026-04-18/file.sql.gz',
           }),
         })
@@ -178,24 +184,33 @@ describe('S3StorageDriver', () => {
       expect(result.key).toBe('copilot-tests/2026-04-18/file.sql.gz')
     })
 
-    it('should stream the upload body instead of buffering the entire file', async () => {
+    it('should upload the staged file with the provided content length', async () => {
       const driver = new S3StorageDriver(mockConfig)
+      const { filePath, size } = await createTempUploadFile('staged data')
 
-      uploadDoneMock.mockImplementationOnce(async (options: { params: { Body: Readable } }) => {
-        expect(Buffer.isBuffer(options.params.Body)).toBe(false)
+      sendMock.mockImplementationOnce(async (command: { input: { Body: Buffer | Readable; ContentLength: number } }) => {
+        expect(command.input.ContentLength).toBe(size)
 
-        const chunks: Buffer[] = []
-        for await (const chunk of options.params.Body) {
-          chunks.push(Buffer.from(chunk))
+        // lib-storage may buffer small files into a Buffer before calling PutObjectCommand
+        const body = command.input.Body
+        let bodyContent: string
+        if (Buffer.isBuffer(body) || body instanceof Uint8Array) {
+          bodyContent = Buffer.from(body).toString()
+        } else {
+          const chunks: Buffer[] = []
+          for await (const chunk of body as AsyncIterable<Buffer>) {
+            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+          }
+          bodyContent = Buffer.concat(chunks).toString()
         }
 
-        expect(Buffer.concat(chunks).toString()).toBe('streamed data')
+        expect(bodyContent).toBe('staged data')
         return { ETag: 'etag-123' }
       })
 
-      const result = await driver.upload(Readable.from(['streamed data']), 'stream.sql.gz')
+      const result = await driver.upload(filePath, 'stream.sql.gz', size)
 
-      expect(result.size).toBe('streamed data'.length)
+      expect(result.size).toBe(size)
       expect(result.etag).toBe('etag-123')
     })
   })
@@ -203,8 +218,9 @@ describe('S3StorageDriver', () => {
   describe('delete', () => {
     it('should delete stored data', async () => {
       const driver = new MockS3StorageDriver(mockConfig)
+      const { filePath, size } = await createTempUploadFile('test data')
       
-      await driver.upload(Readable.from(['test data']), 'test-key.sql.gz')
+      await driver.upload(filePath, 'test-key.sql.gz', size)
       expect(driver.getUploadedKey('test-key.sql.gz')).toBe(true)
 
       await driver.delete('test-key.sql.gz')
@@ -267,8 +283,9 @@ describe('S3StorageDriver', () => {
     it('should return stored data as readable stream', async () => {
       const driver = new MockS3StorageDriver(mockConfig)
       const testData = 'test data content'
+      const { filePath, size } = await createTempUploadFile(testData)
       
-      await driver.upload(Readable.from([testData]), 'test-key.sql.gz')
+      await driver.upload(filePath, 'test-key.sql.gz', size)
       const result = await driver.download('test-key.sql.gz')
       
       const chunks: Buffer[] = []

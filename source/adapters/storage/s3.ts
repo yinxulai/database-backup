@@ -3,7 +3,9 @@
  * @module @yinxulai/database-backup/adapters/storage/s3
  */
 
-import { Transform, type Readable } from 'node:stream'
+import { createReadStream } from 'node:fs'
+import { type Readable } from 'node:stream'
+import { Upload } from '@aws-sdk/lib-storage'
 import {
   S3Client,
   DeleteObjectCommand,
@@ -11,7 +13,6 @@ import {
   ListObjectsV2Command,
   GetObjectCommand,
 } from '@aws-sdk/client-s3'
-import { Upload } from '@aws-sdk/lib-storage'
 import type { StorageObject } from '@core/interfaces'
 import type { ResolvedS3Config, UploadResult } from '@core/types'
 import type { StorageDriver } from '@core/interfaces'
@@ -67,54 +68,40 @@ export class S3StorageDriver implements StorageDriver {
   }
 
   /**
-   * Upload data to S3
+   * Upload a staged backup file to S3.
+   * Uses lib-storage Upload for automatic multipart support on large files.
+   * ContentLength is always known (file-based), so there is no streaming hang risk.
    */
-  async upload(data: Readable, key: string): Promise<UploadResult> {
+  async upload(filePath: string, key: string, contentLength: number): Promise<UploadResult> {
     const fullKey = this.resolveKey(key)
 
-    this.logger.debug('S3 upload started', { key: fullKey, bucket: this.config.bucket })
+    this.logger.debug('S3 upload started', { key: fullKey, bucket: this.config.bucket, filePath, size: contentLength })
 
     const startTime = Date.now()
-    let size = 0
-
-    const body = new Transform({
-      transform(chunk, _encoding, callback) {
-        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-        size += buffer.length
-        callback(null, buffer)
-      },
-    })
-
-    data.on('error', (err) => body.destroy(err))
-    data.pipe(body)
-
     const upload = new Upload({
       client: this.client,
       params: {
         Bucket: this.config.bucket,
         Key: fullKey,
-        Body: body,
+        Body: createReadStream(filePath),
+        ContentLength: contentLength,
         ContentType: 'application/octet-stream',
       },
-      queueSize: 4,
-      partSize: 8 * 1024 * 1024,
-      leavePartsOnError: false,
     })
 
     const response = await upload.done()
-
     const duration = Math.round((Date.now() - startTime) / 1000)
 
     this.logger.info('S3 upload completed', {
       key: fullKey,
-      size,
+      size: contentLength,
       duration,
       bucket: this.config.bucket
     })
 
     return {
       key: fullKey,
-      size,
+      size: contentLength,
       etag: response.ETag ?? '',
       duration,
     }

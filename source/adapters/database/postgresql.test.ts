@@ -2,11 +2,23 @@
  * PostgreSQL Database Driver 单元测试
  */
 
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { EventEmitter } from 'node:events'
-import { PassThrough } from 'node:stream'
 import type { ResolvedConnection } from '../../core/types.js'
 import { PostgreSQLDriver } from './postgresql.js'
+
+// 顶层 mock — 在 postgresql.ts 加载前生效，使 promisify(execFile) 绑定到 mockExecFileCb
+const mockExecFileCb = vi.fn()
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal() as Record<string, unknown>
+  return {
+    ...actual,
+    execFile: (...args: unknown[]) => mockExecFileCb(...args),
+  }
+})
 
 describe('PostgreSQLDriver', () => {
   let driver: PostgreSQLDriver
@@ -25,6 +37,32 @@ describe('PostgreSQLDriver', () => {
     driver = new PostgreSQLDriver(mockConnection, 'secret')
   })
 
+  function succeedExec(assertFn?: (cmd: string, args: string[], opts: { env?: NodeJS.ProcessEnv }) => void) {
+    mockExecFileCb.mockImplementation(
+      (cmd: string, args: string[], opts: { env?: NodeJS.ProcessEnv }, cb: (err: null, stdout: string, stderr: string) => void) => {
+        assertFn?.(cmd, args, opts)
+        cb(null, '', '')
+      }
+    )
+  }
+
+  function failExec(code = 1) {
+    mockExecFileCb.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: (err: Error, stdout: string, stderr: string) => void) => {
+        cb(Object.assign(new Error(`pg_dump exited with code ${code}`), { code }), '', '')
+      }
+    )
+  }
+
+  async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
+    const dir = await mkdtemp(join(tmpdir(), 'pg-test-'))
+    try {
+      return await fn(dir)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  }
+
   describe('type', () => {
     it('should return postgresql as type', () => {
       expect(driver.type).toBe('postgresql')
@@ -33,285 +71,106 @@ describe('PostgreSQLDriver', () => {
 
   describe('connection settings', () => {
     it('should use provided connection settings', () => {
-      const driver = new PostgreSQLDriver(mockConnection, 'secret')
-      expect(driver.type).toBe('postgresql')
+      expect(new PostgreSQLDriver(mockConnection, 'secret').type).toBe('postgresql')
     })
 
     it('should work without password', () => {
-      const driverWithoutPassword = new PostgreSQLDriver(mockConnection)
-      expect(driverWithoutPassword.type).toBe('postgresql')
+      expect(new PostgreSQLDriver(mockConnection).type).toBe('postgresql')
     })
   })
 
   describe('dump', () => {
-    it('should spawn pg_dump with basic arguments', async () => {
-      const mockSpawn = vi.fn()
-        .mockReturnValue({
-          stdout: { on: vi.fn().mockReturnThis(), pipe: vi.fn() },
-          stderr: { on: vi.fn() },
-          on: vi.fn().mockReturnThis(),
-          kill: vi.fn(),
-        /* eslint-disable @typescript-eslint/no-explicit-any */
-        } as any)
+    it('should call pg_dump with basic connection arguments', async () => {
+      succeedExec()
+      await withTempDir(async (dir) => {
+        const destFile = join(dir, 'dump.sql')
+        await driver.dump({ database: 'testdb', tables: [] }, destFile)
 
-      vi.doMock('node:child_process', async (importOriginal) => {
-        const actual = await importOriginal() as Record<string, unknown>
-        return {
-          ...actual,
-          spawn: mockSpawn,
-        }
+        expect(mockExecFileCb).toHaveBeenCalledWith(
+          'pg_dump',
+          expect.arrayContaining(['-h', 'localhost', '-p', '5432', '-U', 'postgres', '-d', 'testdb', '-f', destFile]),
+          expect.any(Object),
+          expect.any(Function)
+        )
       })
+    })
 
-      await driver.dump({ database: 'testdb', tables: [] })
-
-      expect(mockSpawn).toHaveBeenCalledWith(
-        'pg_dump',
-        expect.arrayContaining([
-          '-h', 'localhost',
-          '-p', '5432',
-          '-U', 'postgres',
-          '-d', 'testdb',
-        ]),
-        expect.any(Object)
-      )
-
-      const args = mockSpawn.mock.calls[0]?.[1] as string[]
-      expect(args).not.toContain('--stdout')
-      expect(args).not.toEqual(expect.arrayContaining(['-f', '/dev/null']))
+    it('should pass PGPASSWORD in env', async () => {
+      succeedExec((_cmd, _args, opts) => {
+        expect(opts.env?.PGPASSWORD).toBe('secret')
+      })
+      await withTempDir(async (dir) => {
+        await driver.dump({ database: 'testdb', tables: [] }, join(dir, 'dump.sql'))
+      })
     })
 
     it('should use password from connection when constructor password is omitted', async () => {
-      const mockSpawn = vi.fn()
-        .mockReturnValue({
-          stdout: { on: vi.fn().mockReturnThis(), pipe: vi.fn() },
-          stderr: { on: vi.fn() },
-          on: vi.fn().mockReturnThis(),
-          kill: vi.fn(),
-        /* eslint-disable @typescript-eslint/no-explicit-any */
-        } as any)
-
-      vi.doMock('node:child_process', async (importOriginal) => {
-        const actual = await importOriginal() as Record<string, unknown>
-        return {
-          ...actual,
-          spawn: mockSpawn,
-        }
+      succeedExec((_cmd, _args, opts) => {
+        expect(opts.env?.PGPASSWORD).toBe('secret')
       })
-
       const localDriver = new PostgreSQLDriver(mockConnection)
-      await localDriver.dump({ database: 'testdb', tables: [] })
-
-      expect(mockSpawn).toHaveBeenCalledWith(
-        'pg_dump',
-        expect.any(Array),
-        expect.objectContaining({
-          env: expect.objectContaining({
-            PGPASSWORD: 'secret',
-          }),
-        })
-      )
+      await withTempDir(async (dir) => {
+        await localDriver.dump({ database: 'testdb', tables: [] }, join(dir, 'dump.sql'))
+      })
     })
 
-    it('should emit an error when pg_dump exits with a non-zero code', async () => {
-      const stdout = new PassThrough()
-      const stderr = new PassThrough()
-      const processMock = new EventEmitter() as EventEmitter & {
-        stdout: PassThrough
-        stderr: PassThrough
-        kill: ReturnType<typeof vi.fn>
-      }
-      processMock.stdout = stdout
-      processMock.stderr = stderr
-      processMock.kill = vi.fn()
-
-      const mockSpawn = vi.fn().mockReturnValue(processMock)
-
-      vi.doMock('node:child_process', async (importOriginal) => {
-        const actual = await importOriginal() as Record<string, unknown>
-        return {
-          ...actual,
-          spawn: mockSpawn,
-        }
+    it('should reject when pg_dump exits with non-zero code', async () => {
+      failExec(1)
+      await withTempDir(async (dir) => {
+        await expect(
+          driver.dump({ database: 'testdb', tables: [] }, join(dir, 'dump.sql'))
+        ).rejects.toThrow()
       })
-
-      const localDriver = new PostgreSQLDriver(mockConnection)
-      const stream = await localDriver.dump({ database: 'testdb', tables: [] })
-
-      const streamResult = new Promise<string>((resolve, reject) => {
-        stream.on('error', (err) => resolve(err instanceof Error ? err.message : String(err)))
-        stream.on('end', () => reject(new Error('stream should not end successfully')))
-      })
-
-      stdout.end('partial dump')
-      processMock.emit('close', 1)
-
-      await expect(streamResult).resolves.toContain('pg_dump exited with code 1')
     })
 
-    it('should keep the gzip output open until compression finishes flushing', async () => {
-      const pgDumpProcess = new EventEmitter() as EventEmitter & {
-        stdout: PassThrough
-        stderr: PassThrough
-        kill: ReturnType<typeof vi.fn>
-      }
-      pgDumpProcess.stdout = new PassThrough()
-      pgDumpProcess.stderr = new PassThrough()
-      pgDumpProcess.kill = vi.fn()
-
-      const gzipProcess = new EventEmitter() as EventEmitter & {
-        stdin: PassThrough
-        stdout: PassThrough
-        stderr: PassThrough
-      }
-      gzipProcess.stdin = new PassThrough()
-      gzipProcess.stdout = new PassThrough()
-      gzipProcess.stderr = new PassThrough()
-
-      const mockSpawn = vi.fn()
-        .mockImplementation((command: string) => {
-          if (command === 'pg_dump') {
-            return pgDumpProcess
-          }
-          if (command === 'gzip') {
-            return gzipProcess
-          }
-          throw new Error(`Unexpected command: ${command}`)
-        })
-
-      vi.doMock('node:child_process', async (importOriginal) => {
-        const actual = await importOriginal() as Record<string, unknown>
-        return {
-          ...actual,
-          spawn: mockSpawn,
-        }
+    it('should add --compress=9 flag when compression is gzip', async () => {
+      succeedExec((_cmd, args) => {
+        expect(args).toContain('--compress=9')
       })
-
-      const localDriver = new PostgreSQLDriver(mockConnection)
-      const stream = await localDriver.dump({ database: 'testdb', tables: [], compression: 'gzip' })
-
-      const streamResult = new Promise<string>((resolve, reject) => {
-        const chunks: Buffer[] = []
-        stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
-        stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')))
-        stream.on('error', reject)
+      await withTempDir(async (dir) => {
+        await driver.dump({ database: 'testdb', tables: [], compression: 'gzip' }, join(dir, 'dump.sql.gz'))
       })
-
-      pgDumpProcess.emit('close', 0)
-      gzipProcess.stdout.write('compressed-data')
-      gzipProcess.stdout.end()
-      gzipProcess.emit('close', 0)
-
-      await expect(streamResult).resolves.toBe('compressed-data')
     })
 
-    it('should fail when pg_dump reports no matching tables even if the exit code is zero', async () => {
-      const pgDumpProcess = new EventEmitter() as EventEmitter & {
-        stdout: PassThrough
-        stderr: PassThrough
-        kill: ReturnType<typeof vi.fn>
-      }
-      pgDumpProcess.stdout = new PassThrough()
-      pgDumpProcess.stderr = new PassThrough()
-      pgDumpProcess.kill = vi.fn()
-
-      const mockSpawn = vi.fn().mockReturnValue(pgDumpProcess)
-
-      vi.doMock('node:child_process', async (importOriginal) => {
-        const actual = await importOriginal() as Record<string, unknown>
-        return {
-          ...actual,
-          spawn: mockSpawn,
-        }
+    it('should not add -t flags when no tables are specified', async () => {
+      succeedExec((_cmd, args) => {
+        expect(args).not.toContain('-t')
       })
-
-      const localDriver = new PostgreSQLDriver(mockConnection)
-      const stream = await localDriver.dump({ database: 'testdb', tables: ['public.users'] })
-
-      const streamResult = new Promise<string>((resolve, reject) => {
-        stream.on('error', (err) => resolve(err instanceof Error ? err.message : String(err)))
-        stream.on('end', () => reject(new Error('stream should not end successfully')))
+      await withTempDir(async (dir) => {
+        await driver.dump({ database: 'testdb', tables: [] }, join(dir, 'dump.sql'))
       })
-
-      pgDumpProcess.stderr.write('pg_dump: error: no matching tables were found')
-      pgDumpProcess.stdout.end()
-      pgDumpProcess.emit('close', 0)
-
-      await expect(streamResult).resolves.toContain('no matching tables were found')
-    })
-
-    it('should dump all schemas when no table filter is provided', async () => {
-      const mockSpawn = vi.fn()
-        .mockReturnValue({
-          stdout: { on: vi.fn().mockReturnThis(), pipe: vi.fn() },
-          stderr: { on: vi.fn() },
-          on: vi.fn().mockReturnThis(),
-          kill: vi.fn(),
-        /* eslint-disable @typescript-eslint/no-explicit-any */
-        } as any)
-
-      vi.doMock('node:child_process', async (importOriginal) => {
-        const actual = await importOriginal() as Record<string, unknown>
-        return {
-          ...actual,
-          spawn: mockSpawn,
-        }
-      })
-
-      await driver.dump({ database: 'testdb', tables: [] })
-
-      const args = mockSpawn.mock.calls[0]?.[1] as string[]
-      expect(args).not.toContain('-n')
-      expect(args).not.toContain('-t')
     })
 
     it('should not force the public schema for unqualified table names', async () => {
-      const mockSpawn = vi.fn()
-        .mockReturnValue({
-          stdout: { on: vi.fn().mockReturnThis(), pipe: vi.fn() },
-          stderr: { on: vi.fn() },
-          on: vi.fn().mockReturnThis(),
-          kill: vi.fn(),
-        /* eslint-disable @typescript-eslint/no-explicit-any */
-        } as any)
-
-      vi.doMock('node:child_process', async (importOriginal) => {
-        const actual = await importOriginal() as Record<string, unknown>
-        return {
-          ...actual,
-          spawn: mockSpawn,
-        }
+      succeedExec((_cmd, args) => {
+        expect(args).toContain('users')
+        expect(args).not.toContain('public.users')
       })
-
-      await driver.dump({ database: 'testdb', tables: ['users'] })
-
-      const args = mockSpawn.mock.calls[0]?.[1] as string[]
-      expect(args).toContain('users')
-      expect(args).not.toContain('public.users')
+      await withTempDir(async (dir) => {
+        await driver.dump({ database: 'testdb', tables: ['users'] }, join(dir, 'dump.sql'))
+      })
     })
 
     it('should preserve schema-qualified table names for cross-schema backups', async () => {
-      const mockSpawn = vi.fn()
-        .mockReturnValue({
-          stdout: { on: vi.fn().mockReturnThis(), pipe: vi.fn() },
-          stderr: { on: vi.fn() },
-          on: vi.fn().mockReturnThis(),
-          kill: vi.fn(),
-        /* eslint-disable @typescript-eslint/no-explicit-any */
-        } as any)
-
-      vi.doMock('node:child_process', async (importOriginal) => {
-        const actual = await importOriginal() as Record<string, unknown>
-        return {
-          ...actual,
-          spawn: mockSpawn,
-        }
+      succeedExec((_cmd, args) => {
+        expect(args).toContain('public.users')
+        expect(args).toContain('audit.logs')
       })
+      await withTempDir(async (dir) => {
+        await driver.dump({ database: 'testdb', tables: ['public.users', 'audit.logs'] }, join(dir, 'dump.sql'))
+      })
+    })
 
-      await driver.dump({ database: 'testdb', tables: ['public.users', 'audit.logs'] })
-
-      const args = mockSpawn.mock.calls[0]?.[1] as string[]
-      expect(args).toContain('public.users')
-      expect(args).toContain('audit.logs')
+    it('should pass the destination file path via -f flag', async () => {
+      await withTempDir(async (dir) => {
+        const destFile = join(dir, 'dump.sql')
+        succeedExec((_cmd, args) => {
+          const idx = args.indexOf('-f')
+          expect(idx).toBeGreaterThanOrEqual(0)
+          expect(args[idx + 1]).toBe(destFile)
+        })
+        await driver.dump({ database: 'testdb', tables: [] }, destFile)
+      })
     })
   })
 

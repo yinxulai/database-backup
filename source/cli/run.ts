@@ -117,7 +117,7 @@ async function runCommand(options: CliOptions): Promise<void> {
         databaseDriverFactory: { create: createDatabaseDriver },
       })
 
-      const result = await executor.executeTo(config, undefined, options.dryRun)
+      const result = await executor.execute(config, undefined, options.dryRun)
 
       if (result.status === 'failed') {
         process.exit(1)
