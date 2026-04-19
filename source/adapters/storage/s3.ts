@@ -3,8 +3,7 @@
  * @module @yinxulai/database-backup/adapters/storage/s3
  */
 
-import type { Readable } from 'node:stream'
-import type { Readable as NodeReadable } from 'node:stream'
+import { Transform, type Readable } from 'node:stream'
 import {
   S3Client,
   PutObjectCommand,
@@ -68,19 +67,24 @@ export class S3StorageDriver implements StorageDriver {
   /**
    * Upload data to S3
    */
-  async upload(data: NodeReadable, key: string): Promise<UploadResult> {
+  async upload(data: Readable, key: string): Promise<UploadResult> {
     const fullKey = this.resolveKey(key)
 
     this.logger.debug('S3 upload started', { key: fullKey, bucket: this.config.bucket })
 
     const startTime = Date.now()
+    let size = 0
 
-    // Convert stream to buffer
-    const chunks: Buffer[] = []
-    for await (const chunk of data) {
-      chunks.push(Buffer.from(chunk))
-    }
-    const body = Buffer.concat(chunks)
+    const body = new Transform({
+      transform(chunk, _encoding, callback) {
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+        size += buffer.length
+        callback(null, buffer)
+      },
+    })
+
+    data.on('error', (err) => body.destroy(err))
+    data.pipe(body)
 
     const command = new PutObjectCommand({
       Bucket: this.config.bucket,
@@ -89,21 +93,21 @@ export class S3StorageDriver implements StorageDriver {
       ContentType: 'application/octet-stream',
     })
 
-    await this.client.send(command)
+    const response = await this.client.send(command)
 
     const duration = Math.round((Date.now() - startTime) / 1000)
 
     this.logger.info('S3 upload completed', {
       key: fullKey,
-      size: body.length,
+      size,
       duration,
       bucket: this.config.bucket
     })
 
     return {
       key: fullKey,
-      size: body.length,
-      etag: '',
+      size,
+      etag: response.ETag ?? '',
       duration,
     }
   }

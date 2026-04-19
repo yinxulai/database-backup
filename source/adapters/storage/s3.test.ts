@@ -145,6 +145,30 @@ describe('S3StorageDriver', () => {
       )
       expect(result.key).toBe('copilot-tests/2026-04-18/file.sql.gz')
     })
+
+    it('should stream the upload body instead of buffering the entire file', async () => {
+      const driver = new S3StorageDriver(mockConfig)
+
+      const send = vi.fn(async (command: { input: { Body: Readable } }) => {
+        expect(Buffer.isBuffer(command.input.Body)).toBe(false)
+
+        const chunks: Buffer[] = []
+        for await (const chunk of command.input.Body) {
+          chunks.push(Buffer.from(chunk))
+        }
+
+        expect(Buffer.concat(chunks).toString()).toBe('streamed data')
+        return { ETag: 'etag-123' }
+      })
+
+      const internalDriver = driver as unknown as { client: { send: typeof send } }
+      internalDriver.client = { send }
+
+      const result = await driver.upload(Readable.from(['streamed data']), 'stream.sql.gz')
+
+      expect(result.size).toBe('streamed data'.length)
+      expect(result.etag).toBe('etag-123')
+    })
   })
 
   describe('delete', () => {

@@ -1,17 +1,21 @@
 
 import { randomUUID } from 'node:crypto'
 import { createHash } from 'node:crypto'
-import type { Readable } from 'node:stream'
+import { Transform, type Readable } from 'node:stream'
 import type {
   ResolvedConfig,
   BackupResult,
   RestoreInput,
   RestoreResult,
+  DumpOptions,
+  UploadResult,
 } from './types.js'
 import type {
   BackupExecutor,
   BackupExecutorOptions,
   BackupErrorCode,
+  DatabaseDriver,
+  StorageDriver,
 } from './interfaces.js'
 import { createLogger, type Logger } from './logger.js'
 
@@ -66,13 +70,12 @@ export class DefaultBackupExecutor implements BackupExecutor {
       startTime: new Date(),
     }
 
-    const effectiveConfig = this.prepareRuntimeConfig(config)
-    const { source, destination } = effectiveConfig.config
+    const { source, destination } = config.config
     const databaseName = source.database
 
     // Create database and storage drivers
-    const dbDriver = this.options.databaseDriverFactory.create(effectiveConfig)
-    const storageDriver = this.options.storageDriverFactory.create(effectiveConfig)
+    const dbDriver = this.options.databaseDriverFactory.create(config)
+    const storageDriver = this.options.storageDriverFactory.create(config)
 
     try {
       // 1. Test connection
@@ -84,7 +87,7 @@ export class DefaultBackupExecutor implements BackupExecutor {
       log.info('Database connection successful')
 
       // 2. Generate file key
-      const fileKey = outputKey ?? this.generateFileKey(effectiveConfig, result.startTime)
+      const fileKey = outputKey ?? this.generateFileKey(config, result.startTime)
       result.fileKey = fileKey
       result.tables = source.tables ?? []
 
@@ -97,21 +100,19 @@ export class DefaultBackupExecutor implements BackupExecutor {
         tables,
         compression,
       }
-      const dumpStream = await this.withRetry(
-        () => dbDriver.dump(dumpOptions),
-        'DUMP_FAILED',
-        log
-      )
-      log.info('Database dump stream opened')
-
-      // 4. Compute checksum
-      log.info('Computing checksum')
-      const checksum = await this.computeChecksum(dumpStream)
-      result.checksum = checksum
-      log.info('Checksum computed', { checksum })
-
-      // 5. Dry-run: validate without uploading
+      // 4. Dry-run: validate without uploading
       if (dryRun) {
+        const dumpStream = await this.withRetry(
+          () => dbDriver.dump(dumpOptions),
+          'DUMP_FAILED',
+          log
+        )
+        log.info('Database dump stream opened')
+        log.info('Computing checksum')
+        const checksum = await this.computeChecksum(dumpStream)
+        result.checksum = checksum
+        log.info('Checksum computed', { checksum })
+
         result.status = 'dry-run-completed'
         result.endTime = new Date()
         result.duration = Math.round((result.endTime.getTime() - result.startTime.getTime()) / 1000)
@@ -119,18 +120,17 @@ export class DefaultBackupExecutor implements BackupExecutor {
         return result
       }
 
-      // 6. Get fresh dump stream for upload (previous was consumed by checksum)
-      const dumpStreamForUpload = await dbDriver.dump(dumpOptions)
-
-      // 7. Upload to storage
+      // 5. Upload to storage in a single streaming pass
       log.info('Uploading backup', { destination: destination.type, key: fileKey })
       const uploadResult = await this.withRetry(
-        () => storageDriver.upload(dumpStreamForUpload, fileKey),
+        () => this.uploadWithChecksum(dbDriver, storageDriver, dumpOptions, fileKey, log),
         'UPLOAD_FAILED',
         log
       )
 
       result.size = uploadResult.size
+      result.checksum = uploadResult.checksum
+      log.info('Checksum computed', { checksum: uploadResult.checksum })
       result.status = 'completed'
       result.endTime = new Date()
       result.duration = Math.round((result.endTime.getTime() - result.startTime.getTime()) / 1000)
@@ -293,8 +293,22 @@ export class DefaultBackupExecutor implements BackupExecutor {
    */
   private parseBackupKey(key: string): { database?: string; type?: string } {
     const segments = key.split('/').filter(Boolean)
+    const flatDatePattern = /^\d{4}-\d{2}-\d{2}$/
+    const nestedDatePattern = /^\d{4}$|^\d{2}$/
 
-    if (segments.length >= 6) {
+    if (segments.length >= 4 && flatDatePattern.test(segments[segments.length - 2] ?? '')) {
+      return {
+        type: segments[segments.length - 4],
+        database: segments[segments.length - 3],
+      }
+    }
+
+    if (
+      segments.length >= 6
+      && nestedDatePattern.test(segments[segments.length - 4] ?? '')
+      && nestedDatePattern.test(segments[segments.length - 3] ?? '')
+      && nestedDatePattern.test(segments[segments.length - 2] ?? '')
+    ) {
       return {
         type: segments[segments.length - 6],
         database: segments[segments.length - 5],
@@ -319,38 +333,28 @@ export class DefaultBackupExecutor implements BackupExecutor {
     const databaseName = this.sanitizePathSegment(source.database)
     const taskName = this.sanitizePathSegment(config.config.name)
     const [date] = now.toISOString().split('T')
-    const [year, month, day] = date.split('-')
     const time = now.toTimeString().split(' ')[0].replace(/:/g, '-')
     const extension = config.config.destination.type === 's3' ? 'sql.gz' : 'sql'
 
-    const segments = [
-      config.s3?.pathPrefix,
+    return this.joinPathSegments(
+      this.normalizePathPrefix(config.s3?.pathPrefix),
       source.type,
       databaseName,
-      year,
-      month,
-      day,
+      date,
       `${taskName}-${time}.${extension}`,
-    ].filter((value): value is string => Boolean(value && value.trim().length > 0))
-
-    return segments.join('/')
+    )
   }
 
-  /**
-   * Normalize the configured prefix once so key generation and uploads stay consistent.
-   */
-  private prepareRuntimeConfig(config: ResolvedConfig): ResolvedConfig {
-    if (!config.s3?.pathPrefix) {
-      return config
-    }
+  private normalizePathPrefix(prefix?: string): string | undefined {
+    const normalized = prefix?.replace(/^\/+|\/+$/g, '').trim()
+    return normalized ? normalized : undefined
+  }
 
-    return {
-      ...config,
-      s3: {
-        ...config.s3,
-        pathPrefix: config.s3.pathPrefix.replace(/^\/+|\/+$/g, ''),
-      },
-    }
+  private joinPathSegments(...segments: Array<string | undefined>): string {
+    return segments
+      .map((segment) => segment?.trim())
+      .filter((segment): segment is string => Boolean(segment))
+      .join('/')
   }
 
   private sanitizePathSegment(value: string): string {
@@ -366,24 +370,78 @@ export class DefaultBackupExecutor implements BackupExecutor {
    * Compute SHA256 checksum
    */
   private async computeChecksum(stream: Readable): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const hash = createHash('sha256')
-      let totalBytes = 0
-      
-      stream.on('data', (chunk) => {
+    const { completion } = this.createChecksumTrackingStream(stream)
+    const { checksum } = await completion
+    return checksum
+  }
+
+  private async uploadWithChecksum(
+    dbDriver: DatabaseDriver,
+    storageDriver: StorageDriver,
+    dumpOptions: DumpOptions,
+    fileKey: string,
+    log: Logger
+  ): Promise<UploadResult & { checksum: string }> {
+    const dumpStream = await this.withRetry(
+      () => dbDriver.dump(dumpOptions),
+      'DUMP_FAILED',
+      log
+    )
+    log.info('Database dump stream opened')
+
+    const tracked = this.createChecksumTrackingStream(dumpStream)
+
+    try {
+      const uploadResult = await storageDriver.upload(tracked.stream, fileKey)
+      const { checksum, size } = await tracked.completion
+
+      return {
+        ...uploadResult,
+        size,
+        checksum,
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err))
+      tracked.stream.destroy(error)
+      throw error
+    }
+  }
+
+  private createChecksumTrackingStream(stream: Readable): {
+    stream: Readable
+    completion: Promise<{ checksum: string; size: number }>
+  } {
+    const hash = createHash('sha256')
+    let totalBytes = 0
+
+    const trackedStream = new Transform({
+      transform(chunk, _encoding, callback) {
         const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
         totalBytes += buffer.length
         hash.update(buffer)
-      })
-      stream.on('end', () => {
+        callback(null, buffer)
+      },
+    })
+
+    const completion = new Promise<{ checksum: string; size: number }>((resolve, reject) => {
+      trackedStream.on('finish', () => {
         if (totalBytes === 0) {
           reject(new Error('Database dump produced no data'))
           return
         }
-        resolve(`sha256:${hash.digest('hex')}`)
+
+        resolve({
+          checksum: `sha256:${hash.digest('hex')}`,
+          size: totalBytes,
+        })
       })
-      stream.on('error', reject)
+      trackedStream.on('error', reject)
     })
+
+    stream.on('error', (err) => trackedStream.destroy(err))
+    stream.pipe(trackedStream)
+
+    return { stream: trackedStream, completion }
   }
 
   /**

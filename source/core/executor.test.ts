@@ -2,17 +2,18 @@
  * Executor 单元测试
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
-import type { DumpOptions, ResolvedConfig } from './types.js'
-import type { DatabaseDriver, StorageDriver, StorageObject } from './interfaces.js'
-import { DefaultBackupExecutor } from './executor.js'
 import { Readable } from 'node:stream'
+import { describe, it, expect, beforeEach } from 'vitest'
+import type { DatabaseDriver, StorageDriver, StorageObject } from './interfaces.js'
+import type { DumpOptions, ResolvedConfig } from './types.js'
+import { DefaultBackupExecutor } from './executor.js'
 
 // Mock DatabaseDriver
 class MockDatabaseDriver implements DatabaseDriver {
   readonly type = 'postgresql'
   private connected = true
   private dumpCalled = false
+  private dumpCallCount = 0
   private lastDumpOptions?: DumpOptions
 
   testConnection(): Promise<boolean> {
@@ -21,6 +22,7 @@ class MockDatabaseDriver implements DatabaseDriver {
 
   dump(options: DumpOptions): Promise<Readable> {
     this.dumpCalled = true
+    this.dumpCallCount += 1
     this.lastDumpOptions = options
     return Promise.resolve(Readable.from(['mock dump data']))
   }
@@ -35,6 +37,10 @@ class MockDatabaseDriver implements DatabaseDriver {
 
   getLastDumpOptions(): DumpOptions | undefined {
     return this.lastDumpOptions
+  }
+
+  getDumpCallCount(): number {
+    return this.dumpCallCount
   }
 }
 
@@ -150,14 +156,14 @@ describe('DefaultBackupExecutor', () => {
     expect(result.fileKey).toContain('.gz')
   })
 
-  it('should use a structured prefix-based file key when provided', async () => {
+  it('should use a flat date segment in the file key when a prefix is provided', async () => {
     const config = createMockConfig()
     config.config.destination.s3!.pathPrefix = '/prod/backups/'
     config.s3!.pathPrefix = '/prod/backups/'
 
     const result = await executor.execute(config)
 
-    expect(result.fileKey).toMatch(/^prod\/backups\/postgresql\/testdb\/\d{4}\/\d{2}\/\d{2}\/test-backup-\d{2}-\d{2}-\d{2}\.sql\.gz$/)
+    expect(result.fileKey).toMatch(/^prod\/backups\/postgresql\/testdb\/\d{4}-\d{2}-\d{2}\/test-backup-\d{2}-\d{2}-\d{2}\.sql\.gz$/)
   })
 
   it('should use source.database as the backup target and in the structured key', async () => {
@@ -179,6 +185,13 @@ describe('DefaultBackupExecutor', () => {
     await executor.execute(config)
 
     expect(mockDbDriver.wasDumpCalled()).toBe(true)
+  })
+
+  it('should only dump once for a completed backup upload', async () => {
+    const config = createMockConfig()
+    await executor.execute(config)
+
+    expect(mockDbDriver.getDumpCallCount()).toBe(1)
   })
 
   it('should call storage upload', async () => {
