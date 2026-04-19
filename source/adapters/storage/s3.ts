@@ -6,12 +6,12 @@
 import { Transform, type Readable } from 'node:stream'
 import {
   S3Client,
-  PutObjectCommand,
   DeleteObjectCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
   GetObjectCommand,
 } from '@aws-sdk/client-s3'
+import { Upload } from '@aws-sdk/lib-storage'
 import type { StorageObject } from '@core/interfaces'
 import type { ResolvedS3Config, UploadResult } from '@core/types'
 import type { StorageDriver } from '@core/interfaces'
@@ -88,14 +88,20 @@ export class S3StorageDriver implements StorageDriver {
     data.on('error', (err) => body.destroy(err))
     data.pipe(body)
 
-    const command = new PutObjectCommand({
-      Bucket: this.config.bucket,
-      Key: fullKey,
-      Body: body,
-      ContentType: 'application/octet-stream',
+    const upload = new Upload({
+      client: this.client,
+      params: {
+        Bucket: this.config.bucket,
+        Key: fullKey,
+        Body: body,
+        ContentType: 'application/octet-stream',
+      },
+      queueSize: 4,
+      partSize: 8 * 1024 * 1024,
+      leavePartsOnError: false,
     })
 
-    const response = await this.client.send(command)
+    const response = await upload.done()
 
     const duration = Math.round((Date.now() - startTime) / 1000)
 

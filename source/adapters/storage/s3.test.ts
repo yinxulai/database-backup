@@ -5,12 +5,28 @@
  * 由于 S3 操作需要真实的 S3 服务，我们使用一个简单的 mock 实现。
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { Readable } from 'node:stream'
 
 import type { ResolvedS3Config } from '../../core/types.js'
 import type { StorageDriver, StorageObject } from '../../core/interfaces.js'
 import { S3StorageDriver } from './s3.js'
+
+const { uploadDoneMock, uploadParamsMock } = vi.hoisted(() => ({
+  uploadDoneMock: vi.fn(),
+  uploadParamsMock: vi.fn(),
+}))
+
+vi.mock('@aws-sdk/lib-storage', () => ({
+  Upload: class {
+    constructor(options: unknown) {
+      uploadParamsMock(options)
+      this.done = () => uploadDoneMock(options)
+    }
+
+    done: () => Promise<unknown>
+  },
+}))
 
 // 创建一个 Mock S3StorageDriver 来测试接口契约
 class MockS3StorageDriver implements StorageDriver {
@@ -75,6 +91,11 @@ describe('S3StorageDriver', () => {
     secretAccessKey: 'test-secret',
     forcePathStyle: false,
   }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    uploadDoneMock.mockResolvedValue({ ETag: 'etag-123' })
+  })
 
   describe('interface compliance', () => {
     it('should implement StorageDriver interface', () => {
@@ -142,18 +163,14 @@ describe('S3StorageDriver', () => {
         pathPrefix: 'copilot-tests/2026-04-18',
       })
 
-      const send = vi.fn().mockResolvedValue({})
-      const internalDriver = driver as unknown as { client: { send: typeof send } }
-      internalDriver.client = { send }
-
       const result = await driver.upload(
         Readable.from(['test data']),
         'copilot-tests/2026-04-18/file.sql.gz'
       )
 
-      expect(send).toHaveBeenCalledWith(
+      expect(uploadParamsMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          input: expect.objectContaining({
+          params: expect.objectContaining({
             Key: 'copilot-tests/2026-04-18/file.sql.gz',
           }),
         })
@@ -164,20 +181,17 @@ describe('S3StorageDriver', () => {
     it('should stream the upload body instead of buffering the entire file', async () => {
       const driver = new S3StorageDriver(mockConfig)
 
-      const send = vi.fn(async (command: { input: { Body: Readable } }) => {
-        expect(Buffer.isBuffer(command.input.Body)).toBe(false)
+      uploadDoneMock.mockImplementationOnce(async (options: { params: { Body: Readable } }) => {
+        expect(Buffer.isBuffer(options.params.Body)).toBe(false)
 
         const chunks: Buffer[] = []
-        for await (const chunk of command.input.Body) {
+        for await (const chunk of options.params.Body) {
           chunks.push(Buffer.from(chunk))
         }
 
         expect(Buffer.concat(chunks).toString()).toBe('streamed data')
         return { ETag: 'etag-123' }
       })
-
-      const internalDriver = driver as unknown as { client: { send: typeof send } }
-      internalDriver.client = { send }
 
       const result = await driver.upload(Readable.from(['streamed data']), 'stream.sql.gz')
 
