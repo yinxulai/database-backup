@@ -231,4 +231,20 @@ describe('DefaultBackupExecutor', () => {
     expect(result.checksum).toBeDefined()
     expect(mockStorageDriver.getUploadedKey()).toBeNull()
   })
+
+  it('should fail when the dump stream is empty', async () => {
+    const emptyDriver = new MockDatabaseDriver()
+    emptyDriver.dump = () => Promise.resolve(Readable.from([]))
+
+    const localExecutor = new DefaultBackupExecutor({
+      databaseDriverFactory: { create: () => emptyDriver },
+      storageDriverFactory: { create: () => mockStorageDriver },
+    })
+
+    const config = createMockConfig()
+    const result = await localExecutor.executeTo(config, undefined, true)
+
+    expect(result.status).toBe('failed')
+    expect(result.error).toContain('no data')
+  })
 })

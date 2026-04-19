@@ -5,12 +5,18 @@
  */
 
 import { promisify } from 'node:util'
-import { execFile } from 'node:child_process'
+import { execFile, type ChildProcess } from 'node:child_process'
 import { PassThrough, type Readable, type Writable } from 'node:stream'
 import type { DatabaseDriver } from '@core/interfaces'
 import type { DumpOptions, RestoreOptions, ResolvedConnection } from '@core/types'
 
 const execFileAsync = promisify(execFile)
+
+interface StreamProcess extends ChildProcess {
+  stdout: Readable
+  stderr: Readable
+  stdin: Writable | null
+}
 
 /**
  * PostgreSQL 数据库驱动
@@ -53,51 +59,89 @@ export class PostgreSQLDriver implements DatabaseDriver {
     const env = this.createEnv()
 
     const { spawn } = await import('node:child_process')
-    const pgDump = spawn('pg_dump', args, { env, stdio: ['ignore', 'pipe', 'pipe'] })
     const output = new PassThrough()
+    const pgDump = spawn('pg_dump', args, { env, stdio: ['ignore', 'pipe', 'pipe'] }) as StreamProcess
+    const pgDumpState = this.attachProcessLogging(pgDump, 'pg_dump', output)
 
-    pgDump.stderr.on('data', (data: Buffer | string) => {
-      console.error(`[pg_dump] ${data.toString().trim()}`)
-    })
-    pgDump.on('error', (err) => output.destroy(err))
+    let compressionProcess: StreamProcess | undefined
 
     if (options.compression === 'gzip') {
-      pgDump.on('close', (code) => {
-        if (code !== 0) {
-          output.destroy(new Error(`pg_dump exited with code ${code}`))
-        }
-      })
-      const { spawn: spawnGzip } = await import('node:child_process')
-      const gzip = spawnGzip('gzip', ['-c'], { stdio: ['pipe', 'pipe', 'pipe'] })
+      compressionProcess = spawn('gzip', ['-c'], { stdio: ['pipe', 'pipe', 'pipe'] }) as StreamProcess
+      this.attachProcessLogging(compressionProcess, 'gzip', output)
 
-      pgDump.stdout.pipe(gzip.stdin)
-      gzip.stdout.pipe(output, { end: false })
-      gzip.stderr.on('data', (data: Buffer | string) => {
-        console.error(`[gzip] ${data.toString().trim()}`)
-      })
-      gzip.on('error', (err) => output.destroy(err))
-      gzip.on('close', (code) => {
-        if (code !== 0) {
-          pgDump.kill()
-          output.destroy(new Error(`gzip exited with code ${code}`))
-        } else if (!output.destroyed) {
+      pgDump.stdout.pipe(compressionProcess.stdin!)
+      compressionProcess.stdout.pipe(output, { end: false })
+    } else {
+      pgDump.stdout.pipe(output, { end: false })
+    }
+
+    this.finalizeDumpStream(output, pgDump, pgDumpState, compressionProcess)
+    return output
+  }
+
+  private attachProcessLogging(
+    process: StreamProcess,
+    name: string,
+    output: PassThrough
+  ): { stderr: string } {
+    const state = { stderr: '' }
+
+    process.stderr.on('data', (data: Buffer | string) => {
+      const message = data.toString()
+      state.stderr += message
+      console.error(`[${name}] ${message.trim()}`)
+    })
+
+    process.on('error', (err) => output.destroy(err))
+    return state
+  }
+
+  private finalizeDumpStream(
+    output: PassThrough,
+    pgDump: StreamProcess,
+    pgDumpState: { stderr: string },
+    compressionProcess?: StreamProcess
+  ): void {
+    const completion = [
+      this.waitForProcessExit(pgDump, 'pg_dump', pgDumpState),
+      compressionProcess
+        ? this.waitForProcessExit(compressionProcess, 'gzip', undefined, () => pgDump.kill())
+        : Promise.resolve(),
+    ]
+
+    Promise.all(completion)
+      .then(() => {
+        if (!output.destroyed) {
           output.end()
         }
       })
+      .catch((err) => {
+        output.destroy(err instanceof Error ? err : new Error(String(err)))
+      })
+  }
 
-      return output
-    }
+  private waitForProcessExit(
+    process: StreamProcess,
+    name: string,
+    state?: { stderr: string },
+    onFailure?: () => void
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      process.on('close', (code) => {
+        if (code !== 0) {
+          onFailure?.()
+          reject(new Error(`${name} exited with code ${code}`))
+          return
+        }
 
-    pgDump.on('close', (code) => {
-      if (code !== 0) {
-        output.destroy(new Error(`pg_dump exited with code ${code}`))
-      } else if (!output.destroyed) {
-        output.end()
-      }
+        if (name === 'pg_dump' && /no matching tables were found/i.test(state?.stderr ?? '')) {
+          reject(new Error('pg_dump error: no matching tables were found'))
+          return
+        }
+
+        resolve()
+      })
     })
-
-    pgDump.stdout.pipe(output, { end: false })
-    return output
   }
 
   /**

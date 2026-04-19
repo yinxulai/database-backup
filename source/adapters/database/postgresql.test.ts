@@ -204,6 +204,41 @@ describe('PostgreSQLDriver', () => {
       await expect(streamResult).resolves.toBe('compressed-data')
     })
 
+    it('should fail when pg_dump reports no matching tables even if the exit code is zero', async () => {
+      const pgDumpProcess = new EventEmitter() as EventEmitter & {
+        stdout: PassThrough
+        stderr: PassThrough
+        kill: ReturnType<typeof vi.fn>
+      }
+      pgDumpProcess.stdout = new PassThrough()
+      pgDumpProcess.stderr = new PassThrough()
+      pgDumpProcess.kill = vi.fn()
+
+      const mockSpawn = vi.fn().mockReturnValue(pgDumpProcess)
+
+      vi.doMock('node:child_process', async (importOriginal) => {
+        const actual = await importOriginal() as Record<string, unknown>
+        return {
+          ...actual,
+          spawn: mockSpawn,
+        }
+      })
+
+      const localDriver = new PostgreSQLDriver(mockConnection)
+      const stream = await localDriver.dump({ database: 'testdb', tables: ['public.users'] })
+
+      const streamResult = new Promise<string>((resolve, reject) => {
+        stream.on('error', (err) => resolve(err instanceof Error ? err.message : String(err)))
+        stream.on('end', () => reject(new Error('stream should not end successfully')))
+      })
+
+      pgDumpProcess.stderr.write('pg_dump: error: no matching tables were found')
+      pgDumpProcess.stdout.end()
+      pgDumpProcess.emit('close', 0)
+
+      await expect(streamResult).resolves.toContain('no matching tables were found')
+    })
+
     it('should dump all schemas when no table filter is provided', async () => {
       const mockSpawn = vi.fn()
         .mockReturnValue({

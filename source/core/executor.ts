@@ -102,7 +102,7 @@ export class DefaultBackupExecutor implements BackupExecutor {
         'DUMP_FAILED',
         log
       )
-      log.info('Database dump completed')
+      log.info('Database dump stream opened')
 
       // 4. Compute checksum
       log.info('Computing checksum')
@@ -368,9 +368,20 @@ export class DefaultBackupExecutor implements BackupExecutor {
   private async computeChecksum(stream: Readable): Promise<string> {
     return new Promise((resolve, reject) => {
       const hash = createHash('sha256')
+      let totalBytes = 0
       
-      stream.on('data', (chunk) => hash.update(chunk))
-      stream.on('end', () => resolve(`sha256:${hash.digest('hex')}`))
+      stream.on('data', (chunk) => {
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+        totalBytes += buffer.length
+        hash.update(buffer)
+      })
+      stream.on('end', () => {
+        if (totalBytes === 0) {
+          reject(new Error('Database dump produced no data'))
+          return
+        }
+        resolve(`sha256:${hash.digest('hex')}`)
+      })
       stream.on('error', reject)
     })
   }
