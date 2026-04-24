@@ -54,6 +54,8 @@ export interface BackupDestination {
   s3?: S3Config
   /** Local 配置 */
   local?: LocalConfig
+  /** 目的地图标识名称（可选，用于日志和唯一性） */
+  name?: string
 }
 
 /**
@@ -112,8 +114,10 @@ export interface BackupConfig {
   name: string
   /** 来源配置 */
   source: BackupSource
-  /** 目标配置 */
-  destination: BackupDestination
+  /** 目标配置（单目标简写，与 destinations 互斥）*/
+  destination?: BackupDestination
+  /** 多目标配置（与 destination 互斥，二选一）*/
+  destinations?: BackupDestination[]
   /** 调度配置（可选）*/
   schedule?: ScheduleConfig
   /** 保留策略（可选）*/
@@ -140,8 +144,10 @@ export interface BackupResult {
   size?: number
   /** 校验和 */
   checksum?: string
-  /** 文件 Key */
+  /** 文件 Key（单目标时）*/
   fileKey?: string
+  /** 各目标上传结果（多目标时）*/
+  uploadResults?: UploadResult[]
   /** 备份的表 */
   tables?: string[]
   /** 错误信息 */
@@ -187,8 +193,10 @@ export interface ResolvedConfig {
   config: BackupConfig
   /** 解析后的连接配置 */
   connection: ResolvedConnection
-  /** 解析后的 S3 配置 */
+  /** 解析后的 S3 配置（单目标时） */
   s3?: ResolvedS3Config
+  /** 解析后的多 S3 配置（多目标时）*/
+  s3List?: ResolvedS3Config[]
 }
 
 /**

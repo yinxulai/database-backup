@@ -48,6 +48,7 @@ interface BackupContext {
   dbDriver: DatabaseDriver
   storageDriver: StorageDriver
   stagedFile?: StagedFile
+  uploadResults?: UploadResult[]
 }
 
 // ─── Executor ──────────────────────────────────────────────────────────────────
@@ -173,11 +174,13 @@ export class DefaultBackupExecutor implements BackupExecutor {
   }
 
   private async stageDump(ctx: BackupContext): Promise<void> {
-    const { source, destination } = ctx.config.config
+    const { source, destination, destinations } = ctx.config.config
+    // For multi-destination, use first destination to determine compression
+    const primaryDest = destinations?.[0] ?? destination
     const dumpOptions: DumpOptions = {
       database: source.database,
       tables: source.tables ?? [],
-      compression: destination.type === 's3' ? 'gzip' : undefined,
+      compression: primaryDest?.type === 's3' ? 'gzip' : undefined,
     }
 
     ctx.result.tables = source.tables ?? []
@@ -207,20 +210,44 @@ export class DefaultBackupExecutor implements BackupExecutor {
   private async stageUpload(ctx: BackupContext): Promise<void> {
     const { filePath, size } = ctx.stagedFile!
     const fileKey = ctx.result.fileKey!
+    const { destinations } = ctx.config.config
+    const isMulti = Boolean(destinations && destinations.length > 0)
 
     ctx.log.info('Uploading backup', {
-      destination: ctx.config.config.destination.type,
+      destination: isMulti ? `${destinations!.length} destinations` : ctx.config.config.destination?.type,
       key: fileKey,
       size,
     })
 
-    const uploadResult = await this.withRetry(
+    // Single upload call (withRetry handles retries)
+    // For multi-destination: returns first result, full results stored on driver
+    const firstResult = await this.withRetry(
       () => ctx.storageDriver.upload(filePath, fileKey, size),
       'UPLOAD_FAILED',
       ctx.log
     )
 
-    ctx.log.info('Upload completed', { key: uploadResult.key, size: uploadResult.size })
+    if (isMulti) {
+      // Collect all per-destination results from the multi driver's internal state
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const multiDriver = ctx.storageDriver as any
+      const multiResults: Array<{ destName: string; result: UploadResult }> = multiDriver._lastMultiResults ?? []
+      ctx.uploadResults = multiResults.map((r) => r.result)
+      ctx.result.uploadResults = ctx.uploadResults
+      multiDriver._lastMultiResults = [] // reset for next run
+
+      ctx.log.info('All destination uploads completed', {
+        destinations: destinations!.map((d, i) => ({
+          name: d.name ?? `dest-${i}`,
+          type: d.type,
+        })),
+        key: fileKey,
+        size,
+      })
+    } else {
+      ctx.uploadResults = [firstResult]
+      ctx.log.info('Upload completed', { key: firstResult.key, size: firstResult.size })
+    }
   }
 
   // ── Lifecycle helpers ──────────────────────────────────────────────────────
@@ -408,15 +435,22 @@ export class DefaultBackupExecutor implements BackupExecutor {
   // ── Key generation ─────────────────────────────────────────────────────────
 
   private generateFileKey(config: ResolvedConfig, now = new Date()): string {
-    const { source } = config.config
+    const { source, destination, destinations } = config.config
+    const primaryDest = destinations?.[0] ?? destination
     const databaseName = this.sanitizePathSegment(source.database)
     const taskName = this.sanitizePathSegment(config.config.name)
     const [date] = now.toISOString().split('T')
     const time = now.toTimeString().split(' ')[0].replace(/:/g, '-')
-    const extension = config.config.destination.type === 's3' ? 'sql.gz' : 'sql'
+    // For multi-destination, use first destination's type for extension
+    const extension = primaryDest?.type === 's3' ? 'sql.gz' : 'sql'
+
+    // Use first destination's path prefix for key generation
+    const primaryPrefix = destinations?.[0]?.type === 's3'
+      ? config.s3List?.[0]?.pathPrefix
+      : config.s3?.pathPrefix
 
     return this.joinPathSegments(
-      this.normalizePathPrefix(config.s3?.pathPrefix),
+      this.normalizePathPrefix(primaryPrefix),
       source.type,
       databaseName,
       date,

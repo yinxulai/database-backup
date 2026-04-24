@@ -10,7 +10,7 @@ import { createBackupExecutor } from '@core/executor'
 import { createLogger } from '@core/logger'
 import { createRetentionExecutor } from '@retention/executor'
 import type { DatabaseDriver, StorageDriver } from '@core/interfaces'
-import type { ResolvedConfig, BackupConfig, RestoreInput } from '@core/types'
+import type { ResolvedConfig, BackupConfig, RestoreInput, BackupDestination, UploadResult } from '@core/types'
 
 const logger = createLogger()
 
@@ -277,7 +277,7 @@ For more information, see:
 async function resolveConfig(
   config: BackupConfig
 ): Promise<ResolvedConfig> {
-  const { source, destination } = config
+  const { source, destination, destinations } = config
 
   const password = resolveCredential(
     source.connection.password,
@@ -285,7 +285,7 @@ async function resolveConfig(
   )
 
   let resolvedS3Config
-  if (destination.type === 's3' && destination.s3) {
+  if (destination && destination.type === 's3' && destination.s3) {
     const accessKeyId = resolveCredential(
       destination.s3.accessKeyId,
       'destination.s3.accessKeyId'
@@ -304,6 +304,33 @@ async function resolveConfig(
       pathPrefix: destination.s3.pathPrefix ?? undefined,
       forcePathStyle: destination.s3.forcePathStyle ?? false,
     }
+  }
+
+  // Resolve multi-destination S3 configs
+  let resolvedS3List: ResolvedConfig['s3List']
+  if (destinations) {
+    resolvedS3List = destinations
+      .filter((d) => d.type === 's3' && d.s3)
+      .map((d, idx) => {
+        const s3 = d.s3!
+        const accessKeyId = resolveCredential(s3.accessKeyId, `destinations[${idx}].s3.accessKeyId`)
+        const secretAccessKey = resolveCredential(s3.secretAccessKey, `destinations[${idx}].s3.secretAccessKey`)
+        return {
+          endpoint: s3.endpoint,
+          region: s3.region,
+          bucket: s3.bucket,
+          accessKeyId,
+          secretAccessKey,
+          pathPrefix: s3.pathPrefix ?? undefined,
+          forcePathStyle: s3.forcePathStyle ?? false,
+          endpoint: expandEnvVars(s3.endpoint, `destinations[${idx}].s3.endpoint`),
+          region: expandEnvVars(s3.region, `destinations[${idx}].s3.region`),
+          bucket: expandEnvVars(s3.bucket, `destinations[${idx}].s3.bucket`),
+          pathPrefix: s3.pathPrefix
+            ? expandEnvVars(s3.pathPrefix, `destinations[${idx}].s3.pathPrefix`)
+            : undefined,
+        }
+      })
   }
 
   return {
@@ -327,6 +354,7 @@ async function resolveConfig(
             : undefined,
         }
       : undefined,
+    s3List: resolvedS3List,
   }
 }
 
@@ -359,10 +387,75 @@ function createDatabaseDriver(config: ResolvedConfig): DatabaseDriver {
 }
 
 function createStorageDriver(config: ResolvedConfig): StorageDriver {
-  if (config.config.destination.type === 's3' && config.s3) {
-    return createS3StorageDriver(config.s3)
+  const { destination, destinations } = config.config
+
+  // Multi-destination: create fan-out driver
+  if (destinations && destinations.length > 0) {
+    return createMultiStorageDriver(config, destinations)
   }
-  throw new Error(`Unsupported storage type: ${config.config.destination.type}`)
+
+  // Single-destination
+  if (destination) {
+    if (destination.type === 's3' && config.s3) {
+      return createS3StorageDriver(config.s3)
+    }
+    throw new Error(`Unsupported storage type: ${destination.type}`)
+  }
+
+  throw new Error('No destination or destinations configured')
+}
+
+function createMultiStorageDriver(
+  config: ResolvedConfig,
+  destinations: BackupDestination[]
+): StorageDriver {
+  const drivers = destinations.map((dest, idx) => {
+    if (dest.type === 's3') {
+      const s3Config = config.s3List?.[idx]
+      if (!s3Config) {
+        throw new Error(`Missing S3 config for destinations[${idx}]`)
+      }
+      return createS3StorageDriver(s3Config)
+    }
+    throw new Error(`Unsupported storage type in multi-destination: ${dest.type}`)
+  })
+
+  // Multi results stored on the driver instance, retrievable after upload
+  const _lastMultiResults: Array<{ destName: string; result: UploadResult }> = []
+
+  const driver: StorageDriver = {
+    type: 'multi',
+    async upload(filePath: string, key: string, contentLength: number) {
+      const results = await Promise.all(
+        drivers.map((drv, idx) => {
+          const destName = destinations![idx].name ?? `dest-${idx}`
+          logger.info(`[${destName}] Uploading backup`, { key, size: contentLength })
+          return drv.upload(filePath, key, contentLength).then((result) => {
+            logger.info(`[${destName}] Upload completed`, { key: result.key, size: result.size })
+            _lastMultiResults.push({ destName, result })
+            return result
+          })
+        })
+      )
+      // Return first result as representative; use (driver as any)._lastMultiResults for all
+      return results[0]
+    },
+    async download(key: string) {
+      return drivers[0].download(key)
+    },
+    async delete(key: string) {
+      await Promise.all(drivers.map((drv) => drv.delete(key)))
+    },
+    async list(prefix?: string) {
+      return drivers[0].list(prefix)
+    },
+  }
+
+  // Attach multi-results storage to driver for executor access
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ;(driver as any)._lastMultiResults = _lastMultiResults
+
+  return driver
 }
 
 const isMain = import.meta.url === `file://${process.argv[1]}`

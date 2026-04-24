@@ -97,6 +97,7 @@ export class YamlConfigScanner implements ConfigScanner {
       name,
       source: config.source as BackupConfig['source'],
       destination: config.destination as BackupConfig['destination'],
+      destinations: config.destinations as BackupConfig['destinations'],
       schedule: config.schedule as BackupConfig['schedule'],
       retention: config.retention as BackupConfig['retention'],
     }
@@ -126,13 +127,38 @@ export class YamlConfigScanner implements ConfigScanner {
     }
 
     const destination = config.destination as Record<string, unknown> | undefined
-    if (!destination) {
+    const destinations = config.destinations as Record<string, unknown>[] | undefined
+
+    // 校验 destination 与 destinations 互斥
+    if (destination && destinations) {
+      errors.push({
+        path: `${prefix}`,
+        message: 'destination 与 destinations 只能使用其中之一，不能同时配置',
+      })
+    }
+
+    if (!destination && !destinations) {
       errors.push({
         path: `${prefix}destination`,
-        message: 'destination 是必填字段',
+        message: 'destination 或 destinations 是必填字段',
       })
-    } else {
+    }
+
+    if (destination) {
       this.validateDestination(destination, `${prefix}destination`, errors)
+    }
+
+    if (destinations) {
+      if (!Array.isArray(destinations) || destinations.length === 0) {
+        errors.push({
+          path: `${prefix}destinations`,
+          message: 'destinations 必须是至少包含一个目标的非空数组',
+        })
+      } else {
+        for (let j = 0; j < destinations.length; j++) {
+          this.validateDestination(destinations[j], `${prefix}destinations[${j}]`, errors)
+        }
+      }
     }
 
     const schedule = config.schedule as BackupConfig['schedule'] | undefined
