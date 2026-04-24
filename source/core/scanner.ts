@@ -218,6 +218,31 @@ export class YamlConfigScanner implements ConfigScanner {
         message: 'database 是必填字段',
       })
     }
+
+    // schema 与 schemas 互斥校验
+    const schema = source.schema as string | undefined
+    const schemas = source.schemas as string[] | undefined
+    if (schema !== undefined && schemas !== undefined) {
+      errors.push({
+        path: `${prefix}`,
+        message: 'schema 与 schemas 只能使用其中之一，不能同时配置',
+      })
+    }
+
+    // schemas 格式校验
+    if (schemas !== undefined) {
+      if (!Array.isArray(schemas)) {
+        errors.push({
+          path: `${prefix}.schemas`,
+          message: 'schemas 必须是字符串数组',
+        })
+      } else if (schemas.some((s) => typeof s !== 'string' || !s.trim())) {
+        errors.push({
+          path: `${prefix}.schemas`,
+          message: 'schemas 数组中的每个元素必须是非空字符串',
+        })
+      }
+    }
   }
 
   /**

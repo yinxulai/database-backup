@@ -24,6 +24,10 @@ export interface BackupSource {
   connection: ConnectionConfig
   /** 目标数据库名称（实际备份以这里为准） */
   database: string
+  /** 单个 schema（与 schemas 互斥，设置后只备份该 schema） */
+  schema?: string
+  /** 多个 schema（与 schema 互斥，设置后同时备份多个 schema） */
+  schemas?: string[]
   /** 要备份的表（支持 schema.table；省略或空数组 = 所有 table）*/
   tables?: string[]
 }
@@ -150,6 +154,8 @@ export interface BackupResult {
   uploadResults?: UploadResult[]
   /** 备份的表 */
   tables?: string[]
+  /** 备份的 schema 列表（多 schema 备份时） */
+  schemas?: string[]
   /** 错误信息 */
   error?: string
 }
@@ -165,6 +171,8 @@ export type BackupStatus = 'pending' | 'running' | 'completed' | 'failed' | 'dry
 export interface DumpOptions {
   /** 要备份的表（支持 schema.table；省略或空数组 = 所有 table）*/
   tables?: string[]
+  /** 要备份的 schema 列表（pg_dump -n 可重复）*/
+  schemas?: string[]
   /** 数据库名称 */
   database: string
   /** 压缩格式 */

@@ -148,6 +148,13 @@ export class PostgreSQLDriver implements DatabaseDriver {
       args.push('--ssl-mode=require')
     }
 
+    // Schema 筛选（可重复 -n 参数）
+    if (options.schemas && options.schemas.length > 0) {
+      for (const schema of options.schemas) {
+        args.push('-n', schema.trim())
+      }
+    }
+
     if (options.tables && options.tables.length > 0) {
       for (const table of options.tables) {
         args.push('-t', table.trim())

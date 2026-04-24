@@ -12,6 +12,7 @@ import type {
   RestoreInput,
   RestoreResult,
   DumpOptions,
+  UploadResult,
 } from './types.js'
 import {
   BackupExecutionError,
@@ -179,11 +180,13 @@ export class DefaultBackupExecutor implements BackupExecutor {
     const primaryDest = destinations?.[0] ?? destination
     const dumpOptions: DumpOptions = {
       database: source.database,
+      schemas: source.schemas ?? (source.schema ? [source.schema] : undefined),
       tables: source.tables ?? [],
       compression: primaryDest?.type === 's3' ? 'gzip' : undefined,
     }
 
     ctx.result.tables = source.tables ?? []
+    ctx.result.schemas = dumpOptions.schemas
 
     ctx.stagedFile = await this.withRetry(
       () => this.dumpToTempFile(ctx.dbDriver, dumpOptions, ctx.log),
