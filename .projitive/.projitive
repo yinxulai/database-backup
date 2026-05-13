@@ -135,10 +135,10 @@
     {
       "id": "TASK-0011",
       "title": "评估并设计多 schema 备份支持",
-      "status": "TODO",
+      "status": "DONE",
       "owner": "unassigned",
       "summary": "评估 PostgreSQL 同时备份多个 schema 的必要性与最小实现方案，在不破坏当前简单 YAML 模型的前提下，明确 schema 与 schemas 的配置方式、与 tables 的组合规则、对 pg_dump 参数的影响、恢复边界以及验收标准。该能力作为第二阶段增强进行设计。",
-      "updatedAt": "2026-04-18T13:24:01.596Z",
+      "updatedAt": "2026-04-24T22:08:19.032Z",
       "links": [
         "designs/research/TASK-0011.implementation-research.md",
         "source/adapters/database/postgresql.ts",
@@ -150,7 +150,7 @@
         "phase": "discovery",
         "confidence": 0.88
       },
-      "recordVersion": 1
+      "recordVersion": 3
     }
   ],
   "roadmaps": [
@@ -164,7 +164,7 @@
     }
   ],
   "meta": {
-    "tasks_version": 30,
+    "tasks_version": 32,
     "roadmaps_version": 2,
     "store_schema_version": 3
   },
@@ -172,9 +172,9 @@
     "tasks_markdown": {
       "name": "tasks_markdown",
       "dirty": false,
-      "lastSourceVersion": 30,
-      "lastBuiltAt": "2026-04-24T21:03:08.677Z",
-      "recordVersion": 89
+      "lastSourceVersion": 32,
+      "lastBuiltAt": "2026-04-24T22:08:19.038Z",
+      "recordVersion": 95
     },
     "roadmaps_markdown": {
       "name": "roadmaps_markdown",
